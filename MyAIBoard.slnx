@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MyAIBoard.App/MyAIBoard.App.csproj" />
+    <Project Path="src/MyAIBoard.Core/MyAIBoard.Core.csproj" />
+    <Project Path="src/MyAIBoard.Mcp/MyAIBoard.Mcp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MyAIBoard.Core.Tests/MyAIBoard.Core.Tests.csproj" />
+  </Folder>
+</Solution>

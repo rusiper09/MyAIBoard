@@ -1,0 +1,284 @@
+﻿<Window x:Class="MyAIBoard.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MyAIBoard.App"
+        Title="MyAIBoard"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" ResizeMode="CanResize"
+        MinWidth="240" MinHeight="160"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <!-- Borderless, but keep native edge resizing. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"
+                      CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.ContextMenu>
+        <ContextMenu x:Name="BoardMenu" Opened="BoardMenu_Opened">
+            <MenuItem Header="새 메모" Click="NewMemo_Click" />
+            <MenuItem x:Name="VisibilityItem" Header="위젯 숨기기" Click="ToggleVisibility_Click" />
+            <MenuItem x:Name="TrashItem" Header="휴지통" Click="TrashItem_Click" />
+            <Separator />
+            <MenuItem Header="정렬" IsEnabled="False" />
+            <MenuItem x:Name="SortManualItem" Header="직접 정렬 (드래그)" Tag="{x:Static local:SortMode.Manual}" Click="Sort_Click" />
+            <MenuItem x:Name="SortNewestItem" Header="최신순" Tag="{x:Static local:SortMode.Newest}" Click="Sort_Click" />
+            <MenuItem x:Name="SortOldestItem" Header="오래된순" Tag="{x:Static local:SortMode.Oldest}" Click="Sort_Click" />
+            <MenuItem x:Name="SortTitleItem" Header="제목순" Tag="{x:Static local:SortMode.Title}" Click="Sort_Click" />
+            <Separator />
+            <MenuItem Header="모두 접기" Click="CollapseAll_Click" />
+            <MenuItem Header="모두 펼치기" Click="ExpandAll_Click" />
+            <Separator />
+            <MenuItem Header="창 모드" IsEnabled="False" />
+            <MenuItem x:Name="DesktopModeItem" Header="바탕화면에 고정" Click="DesktopMode_Click" />
+            <MenuItem x:Name="TopmostModeItem" Header="항상 위에" Click="TopmostMode_Click" />
+            <MenuItem x:Name="NormalModeItem" Header="일반 창" Click="NormalMode_Click" />
+            <Separator />
+            <MenuItem x:Name="AutostartItem" Header="Windows 시작 시 실행" Click="Autostart_Click" />
+            <MenuItem Header="종료" Click="Exit_Click" />
+        </ContextMenu>
+    </Window.ContextMenu>
+
+    <Grid>
+        <!-- Glass layers, back to front: tint over the OS blur, then the top sheen. -->
+        <Border CornerRadius="{StaticResource WidgetCornerRadius}" Background="{StaticResource GlassTint}" />
+        <Border CornerRadius="{StaticResource WidgetCornerRadius}" Background="{StaticResource GlassSheen}" />
+
+        <Grid Margin="14,12,14,6" TextElement.FontFamily="{StaticResource UiFont}"
+              TextElement.Foreground="{StaticResource TextPrimary}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Header: drag here to move the widget. -->
+            <Grid x:Name="Header" Background="Transparent" Margin="4,0,0,10"
+                  MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Effect="{StaticResource TextLift}">
+                    <Button x:Name="BackButton" Style="{StaticResource IconButton}" Content="&#xE72B;"
+                            ToolTip="보드로 돌아가기" Click="BackToBoard_Click" Margin="-4,0,6,0" Visibility="Collapsed" />
+                    <TextBlock x:Name="HeaderTitle" Text="AI Board" FontSize="17" FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                    <Border x:Name="CountPill" Background="{StaticResource ButtonFill}" CornerRadius="9"
+                            Padding="7,1,7,2" Margin="9,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="CountText" FontSize="11.5" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondary}" />
+                    </Border>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="NewMemoButton" Style="{StaticResource IconButton}" Content="&#xE710;"
+                            ToolTip="새 메모" Click="NewMemo_Click" Margin="0,0,6,0" />
+                    <Button x:Name="EmptyTrashButton" Style="{StaticResource IconButton}" Content="&#xE74D;"
+                            ToolTip="휴지통 비우기" Click="EmptyTrash_Click" Margin="0,0,6,0" Visibility="Collapsed" />
+                    <Button x:Name="MenuButton" Style="{StaticResource IconButton}" Content="&#xE712;"
+                            ToolTip="메뉴" Click="MenuButton_Click" />
+                </StackPanel>
+            </Grid>
+
+            <ScrollViewer x:Name="MemoScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" Padding="0,0,2,0" Background="Transparent"
+                          FocusVisualStyle="{x:Null}"
+                          AllowDrop="True" DragOver="MemoScroller_DragOver" DragLeave="MemoScroller_DragLeave"
+                          Drop="MemoScroller_Drop">
+                <ItemsControl x:Name="MemoList" Margin="0,0,0,6">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:MemoItem}">
+                            <!-- Starts hidden and slightly low; the Loaded trigger below floats it into place. -->
+                            <Border x:Name="Card" Style="{StaticResource MemoCard}" Opacity="0"
+                                    PreviewMouseLeftButtonDown="Card_PreviewMouseLeftButtonDown"
+                                    PreviewMouseMove="Card_PreviewMouseMove"
+                                    MouseLeftButtonDown="Card_MouseLeftButtonDown">
+                                <Border.RenderTransform>
+                                    <TranslateTransform Y="12" />
+                                </Border.RenderTransform>
+                                <Grid x:Name="CardContent">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Glowing bar in the color of whoever wrote the memo. -->
+                                    <Border x:Name="AccentBar" Width="3" CornerRadius="1.5" Margin="0,2,11,2"
+                                            Background="{StaticResource SourceOther}" Effect="{StaticResource GlowOther}" />
+
+                                    <!-- Read view -->
+                                    <StackPanel x:Name="ViewPanel" Grid.Column="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="TitleText" Text="{Binding Title}" FontSize="14"
+                                                       FontWeight="SemiBold" Foreground="{StaticResource CardTextPrimary}"
+                                                       TextWrapping="Wrap" VerticalAlignment="Center" />
+                                            <Button x:Name="CollapseButton" Grid.Column="1" Style="{StaticResource CardIconButton}"
+                                                    Content="&#xE70E;" ToolTip="접기" Margin="6,-3,-6,-3"
+                                                    VerticalAlignment="Top" Click="ToggleCollapse_Click" />
+                                        </Grid>
+                                        <TextBlock x:Name="BodyText" Text="{Binding Body}" FontSize="13" Margin="0,4,0,0"
+                                                   Foreground="{StaticResource CardTextSecondary}" TextWrapping="Wrap"
+                                                   LineHeight="19" />
+                                        <Grid x:Name="Footer" Margin="0,7,0,0">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock x:Name="SourceText" Text="{Binding SourceLabel}" FontSize="11"
+                                                           FontWeight="SemiBold" Foreground="{StaticResource SourceOther}" />
+                                                <TextBlock Text="{Binding TimeText, StringFormat=' · {0}'}" FontSize="11"
+                                                           Foreground="{StaticResource CardTextTertiary}" />
+                                            </StackPanel>
+                                            <!-- Actions appear while hovering the card. -->
+                                            <StackPanel x:Name="Actions" Orientation="Horizontal" HorizontalAlignment="Right"
+                                                        Margin="0,-5,-6,-5" Opacity="0" IsHitTestVisible="False">
+                                                <Button Style="{StaticResource CardIconButton}" Content="&#xE70F;"
+                                                        ToolTip="편집" Click="Edit_Click" />
+                                                <Button Style="{StaticResource CardIconButton}" Content="&#xE74D;"
+                                                        ToolTip="휴지통으로" Click="Delete_Click" />
+                                            </StackPanel>
+                                            <StackPanel x:Name="TrashActions" Orientation="Horizontal" HorizontalAlignment="Right"
+                                                        Margin="0,-5,-6,-5" Opacity="0" IsHitTestVisible="False"
+                                                        Visibility="Collapsed">
+                                                <Button Style="{StaticResource CardIconButton}" Content="&#xE7A7;"
+                                                        ToolTip="복원" Click="RestoreFromTrash_Click" />
+                                                <Button Style="{StaticResource CardIconButton}" Content="&#xE711;"
+                                                        ToolTip="영구 삭제" Click="Purge_Click" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Edit view: Ctrl+Enter saves, Esc cancels. -->
+                                    <StackPanel x:Name="EditPanel" Grid.Column="1" Visibility="Collapsed"
+                                                PreviewKeyDown="Editor_PreviewKeyDown">
+                                        <TextBox x:Name="EditTitleBox" Style="{StaticResource GlassTextBox}" Tag="제목"
+                                                 Text="{Binding EditTitle, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontSize="14" FontWeight="SemiBold" TextWrapping="NoWrap"
+                                                 IsVisibleChanged="EditTitleBox_IsVisibleChanged"
+                                                 Loaded="EditTitleBox_Loaded" />
+                                        <TextBox x:Name="EditBodyBox" Style="{StaticResource GlassTextBox}" Tag="내용 (선택)"
+                                                 Text="{Binding EditBody, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontSize="13" AcceptsReturn="True" MinHeight="64" MaxHeight="220"
+                                                 Margin="0,6,0,0" />
+                                        <Grid Margin="0,8,0,0">
+                                            <TextBlock Text="Ctrl+Enter 저장 · Esc 취소" FontSize="11"
+                                                       Foreground="{StaticResource CardTextTertiary}" VerticalAlignment="Center" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,-4,-6,-4">
+                                                <Button Style="{StaticResource CardIconButton}" Content="&#xE711;"
+                                                        ToolTip="취소 (Esc)" Click="CancelEdit_Click" />
+                                                <Button Style="{StaticResource CardIconButton}" Content="&#xE73E;"
+                                                        Foreground="{StaticResource Accent}"
+                                                        ToolTip="저장 (Ctrl+Enter)" Click="SaveEdit_Click" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding Source}" Value="Claude">
+                                    <Setter TargetName="AccentBar" Property="Background" Value="{StaticResource SourceClaude}" />
+                                    <Setter TargetName="AccentBar" Property="Effect" Value="{StaticResource GlowClaude}" />
+                                    <Setter TargetName="SourceText" Property="Foreground" Value="{StaticResource SourceClaude}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Source}" Value="Codex">
+                                    <Setter TargetName="AccentBar" Property="Background" Value="{StaticResource SourceCodex}" />
+                                    <Setter TargetName="AccentBar" Property="Effect" Value="{StaticResource GlowCodex}" />
+                                    <Setter TargetName="SourceText" Property="Foreground" Value="{StaticResource SourceCodex}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Source}" Value="User">
+                                    <Setter TargetName="AccentBar" Property="Background" Value="{StaticResource SourceUser}" />
+                                    <Setter TargetName="AccentBar" Property="Effect" Value="{StaticResource GlowUser}" />
+                                    <Setter TargetName="SourceText" Property="Foreground" Value="{StaticResource SourceUser}" />
+                                </DataTrigger>
+
+                                <DataTrigger Binding="{Binding HasBody}" Value="False">
+                                    <Setter TargetName="BodyText" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <!-- Collapsed: a single title line; the bar and chevron stay. -->
+                                <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
+                                    <Setter TargetName="BodyText" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="Footer" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="TitleText" Property="TextWrapping" Value="NoWrap" />
+                                    <Setter TargetName="TitleText" Property="TextTrimming" Value="CharacterEllipsis" />
+                                    <Setter TargetName="CollapseButton" Property="Content" Value="&#xE70D;" />
+                                    <Setter TargetName="CollapseButton" Property="ToolTip" Value="펼치기" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                    <Setter TargetName="ViewPanel" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="EditPanel" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsDeleted}" Value="True">
+                                    <Setter TargetName="CollapseButton" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="Actions" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="TrashActions" Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsDragging}" Value="True">
+                                    <Setter TargetName="CardContent" Property="Opacity" Value="0.35" />
+                                </DataTrigger>
+                                <Trigger SourceName="Card" Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Actions" Property="Opacity" Value="1" />
+                                    <Setter TargetName="Actions" Property="IsHitTestVisible" Value="True" />
+                                    <Setter TargetName="TrashActions" Property="Opacity" Value="1" />
+                                    <Setter TargetName="TrashActions" Property="IsHitTestVisible" Value="True" />
+                                </Trigger>
+
+                                <EventTrigger SourceName="Card" RoutedEvent="FrameworkElement.Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Card" Storyboard.TargetProperty="Opacity"
+                                                             To="1" Duration="0:0:0.35" />
+                                            <DoubleAnimation Storyboard.TargetName="Card"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                             To="0" Duration="0:0:0.5">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <CubicEase EasingMode="EaseOut" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Accent line showing where a dragged memo will land. -->
+            <Canvas x:Name="DropLayer" Grid.Row="1" IsHitTestVisible="False">
+                <Border x:Name="DropIndicator" Height="2" CornerRadius="1" Background="{StaticResource Accent}"
+                        Visibility="Collapsed">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="8" ShadowDepth="0" Color="#A8D1FF" Opacity="0.9" />
+                    </Border.Effect>
+                </Border>
+            </Canvas>
+
+            <TextBlock x:Name="EmptyText" Grid.Row="1" TextAlignment="Center" VerticalAlignment="Center"
+                       TextWrapping="Wrap" FontSize="13" LineHeight="20" Margin="12,0,12,24"
+                       Foreground="{StaticResource TextSecondary}" Effect="{StaticResource TextLift}"
+                       IsHitTestVisible="False" />
+
+            <!-- Undo toast after a delete. -->
+            <Border x:Name="UndoToast" Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                    Margin="0,0,0,10" Padding="14,6,6,6" CornerRadius="16" Visibility="Collapsed"
+                    Background="{StaticResource PopupFill}" BorderBrush="{StaticResource CardRim}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="UndoText" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondary}" />
+                    <Button Content="되돌리기" Click="Undo_Click" Margin="10,0,0,0" Cursor="Hand" Focusable="False"
+                            FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Accent}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="Bg" Background="Transparent" CornerRadius="11" Padding="9,3">
+                                    <ContentPresenter />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bg" Property="Background" Value="{StaticResource ButtonFillHover}" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

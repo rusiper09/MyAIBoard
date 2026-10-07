@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MyAIBoard.Core\MyAIBoard.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- Only for the tray icon (NotifyIcon); WPF has no equivalent. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>MyAIBoard</AssemblyName>
+    <RootNamespace>MyAIBoard.App</RootNamespace>
+    <ApplicationIcon>Assets\MyAIBoard.ico</ApplicationIcon>
+    <Product>MyAIBoard</Product>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinForms and System.Drawing types clash with WPF names (Application, Point, ...); reference them explicitly. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\MyAIBoard.ico" LogicalName="MyAIBoard.ico" />
+  </ItemGroup>
+
+</Project>

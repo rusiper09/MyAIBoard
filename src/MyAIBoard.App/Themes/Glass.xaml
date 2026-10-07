@@ -1,0 +1,267 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        "Liquid glass" look. The OS blurs whatever is behind the window (see GlassBackdrop);
+        everything here is the tint, sheen and specular rims painted on top of that blur.
+        All colors and shapes live in this file; swap it to restyle.
+    -->
+
+    <!-- Shape -->
+    <CornerRadius x:Key="WidgetCornerRadius">22</CornerRadius>
+    <system:Double x:Key="WidgetCornerRadiusValue" xmlns:system="clr-namespace:System;assembly=System.Runtime">22</system:Double>
+    <CornerRadius x:Key="CardCornerRadius">14</CornerRadius>
+
+    <!-- Text -->
+    <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
+    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+    <SolidColorBrush x:Key="TextPrimary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#D0FFFFFF" />
+    <SolidColorBrush x:Key="TextTertiary" Color="#94FFFFFF" />
+    <SolidColorBrush x:Key="Accent" Color="#A8D1FF" />
+
+    <!-- Widget glass: a slight dark tint keeps white text readable on bright wallpapers. -->
+    <SolidColorBrush x:Key="GlassTint" Color="#47181A20" />
+    <!-- Sheen: light falling on the top of the glass. -->
+    <LinearGradientBrush x:Key="GlassSheen" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#2EFFFFFF" />
+        <GradientStop Offset="0.35" Color="#0AFFFFFF" />
+        <GradientStop Offset="1" Color="#00FFFFFF" />
+    </LinearGradientBrush>
+    <!-- Memo cards: denser dark glass than the board so text does not depend on what is behind. -->
+    <LinearGradientBrush x:Key="CardFill" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#8C1E2026" />
+        <GradientStop Offset="1" Color="#7A1A1C21" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="CardFillHover" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#A6262830" />
+        <GradientStop Offset="1" Color="#94202228" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="CardTextPrimary" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="CardTextSecondary" Color="#E6FFFFFF" />
+    <SolidColorBrush x:Key="CardTextTertiary" Color="#A6FFFFFF" />
+
+    <!-- Who wrote the memo: accent bar, its glow, and the source label. -->
+    <SolidColorBrush x:Key="SourceClaude" Color="#F0997A" />
+    <SolidColorBrush x:Key="SourceCodex" Color="#5EDBA9" />
+    <SolidColorBrush x:Key="SourceUser" Color="#8AB8FF" />
+    <SolidColorBrush x:Key="SourceOther" Color="#C7A8FF" />
+    <DropShadowEffect x:Key="GlowClaude" BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="#F0997A" />
+    <DropShadowEffect x:Key="GlowCodex" BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="#5EDBA9" />
+    <DropShadowEffect x:Key="GlowUser" BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="#8AB8FF" />
+    <DropShadowEffect x:Key="GlowOther" BlurRadius="10" ShadowDepth="0" Opacity="0.9" Color="#C7A8FF" />
+
+    <!-- Specular rim on cards and buttons: bright where light hits (top-left), a softer bounce at the bottom-right. -->
+    <LinearGradientBrush x:Key="CardRim" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#4DFFFFFF" />
+        <GradientStop Offset="0.4" Color="#14FFFFFF" />
+        <GradientStop Offset="1" Color="#26FFFFFF" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="ButtonFill" Color="#1FFFFFFF" />
+    <SolidColorBrush x:Key="ButtonFillHover" Color="#38FFFFFF" />
+    <SolidColorBrush x:Key="ButtonFillPressed" Color="#4DFFFFFF" />
+
+    <!-- Popups are separate windows without blur, so they get a denser glass. -->
+    <SolidColorBrush x:Key="PopupFill" Color="#EB2A2D35" />
+
+    <!-- Soft shadow under text so it stays legible over any background. -->
+    <DropShadowEffect x:Key="TextLift" BlurRadius="6" ShadowDepth="0" Opacity="0.35" Color="Black" />
+
+    <Style x:Key="IconButton" TargetType="Button">
+        <Setter Property="Width" Value="30" />
+        <Setter Property="Height" Value="30" />
+        <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Background" Value="{StaticResource ButtonFill}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="15"
+                            BorderBrush="{StaticResource CardRim}" BorderThickness="1">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource ButtonFillHover}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource ButtonFillPressed}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="MemoCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource CardFill}" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardRim}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
+        <Setter Property="Padding" Value="14,11" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource CardFillHover}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Small borderless buttons inside cards (collapse, edit, delete). -->
+    <Style x:Key="CardIconButton" TargetType="Button">
+        <Setter Property="Width" Value="24" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{StaticResource CardTextTertiary}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="12">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource ButtonFillHover}" />
+                            <Setter Property="Foreground" Value="{StaticResource CardTextPrimary}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource ButtonFillPressed}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Text input that looks like a recessed pane of glass. -->
+    <Style x:Key="GlassTextBox" TargetType="TextBox">
+        <Setter Property="Foreground" Value="{StaticResource CardTextPrimary}" />
+        <Setter Property="CaretBrush" Value="{StaticResource CardTextPrimary}" />
+        <Setter Property="SelectionBrush" Value="{StaticResource Accent}" />
+        <Setter Property="Background" Value="#14FFFFFF" />
+        <Setter Property="BorderBrush" Value="#1FFFFFFF" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Frame" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1" CornerRadius="8">
+                        <Grid>
+                            <!-- TextBox applies its Padding inside the content host itself. -->
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalScrollBarVisibility="Auto" />
+                            <!-- Placeholder: the Tag shows while the box is empty. 2px matches the caret gutter. -->
+                            <TextBlock x:Name="Placeholder" Text="{TemplateBinding Tag}" IsHitTestVisible="False"
+                                       Margin="{TemplateBinding Padding}" Padding="2,0,0,0"
+                                       Foreground="{StaticResource CardTextTertiary}" Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="#66A8D1FF" />
+                            <Setter TargetName="Frame" Property="Background" Value="#1FFFFFFF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Slim, pill-shaped scrollbar. -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="Width" Value="5" />
+        <Setter Property="MinWidth" Value="5" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Track x:Name="PART_Track" IsDirectionReversed="True">
+                        <Track.Thumb>
+                            <Thumb>
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Border Background="#59FFFFFF" CornerRadius="2.5" />
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </Track.Thumb>
+                    </Track>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ContextMenu">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="HasDropShadow" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{StaticResource PopupFill}" BorderBrush="{StaticResource CardRim}"
+                            BorderThickness="1" CornerRadius="14" Padding="5">
+                        <StackPanel IsItemsHost="True" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bg" Background="Transparent" CornerRadius="9" Padding="8,7">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="22" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="Check" Text="&#xE73E;" FontFamily="{StaticResource IconFont}"
+                                       FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource Accent}"
+                                       Visibility="Collapsed" />
+                            <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center"
+                                              Margin="0,0,14,0" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource ButtonFillHover}" />
+                        </Trigger>
+                        <!-- Disabled items serve as small group labels ("정렬", "창 모드"). -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+                            <Setter Property="FontSize" Value="11" />
+                            <Setter TargetName="Bg" Property="Padding" Value="8,6,8,2" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Separators inside menus look up this special key rather than the implicit Separator style. -->
+    <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Separator">
+                    <Border Height="1" Margin="8,4" Background="#26FFFFFF" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>
