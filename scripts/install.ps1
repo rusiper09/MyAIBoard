@@ -50,6 +50,22 @@ if ($renamed -gt 0) {
 
 $exe = Join-Path $installDir 'MyAIBoard.exe'
 
+# The Codex desktop app runs MCP servers as sandbox accounts (group CodexSandboxUsers), which
+# cannot see this folder by default. Let them use the board: modify in the data folder (the
+# database and its WAL files), but only read/execute in bin, so a sandboxed agent cannot
+# replace programs that later run as you. Codex must also be given MYAIBOARD_DB (see README),
+# because the sandbox account has its own %LOCALAPPDATA%.
+$sandboxGroup = 'CodexSandboxUsers'
+if (Get-LocalGroup -Name $sandboxGroup -ErrorAction SilentlyContinue) {
+    Write-Host "==> Access for the Codex sandbox ($sandboxGroup)" -ForegroundColor Cyan
+    $dataDir = Split-Path $installDir -Parent
+    icacls $dataDir /grant "${sandboxGroup}:(OI)(CI)M" | Out-Null
+    icacls $installDir /inheritance:d | Out-Null
+    icacls $installDir /remove:g $sandboxGroup /T | Out-Null
+    icacls $installDir /grant "${sandboxGroup}:(OI)(CI)RX" /T | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Could not set folder permissions for $sandboxGroup." }
+}
+
 Write-Host '==> Start menu shortcut' -ForegroundColor Cyan
 $shortcutPath = Join-Path ([Environment]::GetFolderPath('Programs')) 'MyAIBoard.lnk'
 $shell = New-Object -ComObject WScript.Shell
