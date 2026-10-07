@@ -44,6 +44,8 @@ public sealed class MemoItem : INotifyPropertyChanged
     public string Body { get; private set { if (SetField(ref field, value)) OnPropertyChanged(nameof(HasBody)); } } = "";
     public string Source { get; private set { if (SetField(ref field, value)) OnPropertyChanged(nameof(SourceLabel)); } } = "";
     public string TimeText { get; private set => SetField(ref field, value); } = "";
+    /// <summary>Exact created / edited / deleted times, shown when hovering the time.</summary>
+    public string TimeToolTip { get; private set => SetField(ref field, value); } = "";
     public bool HasBody => !string.IsNullOrWhiteSpace(Body);
     public string SourceLabel => Source == "User" ? "나" : Source;
 
@@ -69,7 +71,10 @@ public sealed class MemoItem : INotifyPropertyChanged
         IsCollapsed = memo.IsCollapsed && !IsDeleted;
         TimeText = memo.DeletedAt is { } deletedAt
             ? $"{RelativeTime(deletedAt, now)} 삭제"
-            : RelativeTime(memo.CreatedAt, now);
+            : CreatedAndEdited(memo.CreatedAt, memo.UpdatedAt, now);
+        TimeToolTip = $"작성 {Exact(memo.CreatedAt)}"
+                      + (memo.UpdatedAt > memo.CreatedAt ? $"\n수정 {Exact(memo.UpdatedAt)}" : "")
+                      + (memo.DeletedAt is { } deleted ? $"\n삭제 {Exact(deleted)}" : "");
     }
 
     public void BeginEdit()
@@ -81,6 +86,18 @@ public sealed class MemoItem : INotifyPropertyChanged
     }
 
     public void EndEdit() => IsEditing = false;
+
+    /// <summary>"2일 전", or "2일 전 · 수정 5분 전" once the title or body was edited.</summary>
+    internal static string CreatedAndEdited(DateTimeOffset created, DateTimeOffset updated, DateTimeOffset now)
+    {
+        var createdText = RelativeTime(created, now);
+        if (updated <= created) return createdText;
+
+        var updatedText = RelativeTime(updated, now);
+        return updatedText == createdText ? $"{createdText} · 수정됨" : $"{createdText} · 수정 {updatedText}";
+    }
+
+    private static string Exact(DateTimeOffset time) => time.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
     internal static string RelativeTime(DateTimeOffset time, DateTimeOffset now)
     {

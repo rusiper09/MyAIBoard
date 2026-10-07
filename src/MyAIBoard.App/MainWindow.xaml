@@ -137,6 +137,7 @@
                                                 <TextBlock x:Name="SourceText" Text="{Binding SourceLabel}" FontSize="11"
                                                            FontWeight="SemiBold" Foreground="{StaticResource SourceOther}" />
                                                 <TextBlock Text="{Binding TimeText, StringFormat=' · {0}'}" FontSize="11"
+                                                           ToolTip="{Binding TimeToolTip}"
                                                            Foreground="{StaticResource CardTextTertiary}" />
                                             </StackPanel>
                                             <!-- Actions appear while hovering the card. -->
