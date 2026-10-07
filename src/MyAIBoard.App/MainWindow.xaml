@@ -17,7 +17,7 @@
 
     <Window.ContextMenu>
         <ContextMenu x:Name="BoardMenu" Opened="BoardMenu_Opened">
-            <MenuItem Header="새 메모" Click="NewMemo_Click" />
+            <MenuItem x:Name="NewMemoMenuItem" Header="새 메모" Click="NewMemo_Click" />
             <MenuItem x:Name="VisibilityItem" Header="위젯 숨기기" Click="ToggleVisibility_Click" />
             <MenuItem x:Name="TrashItem" Header="휴지통" Click="TrashItem_Click" />
             <Separator />

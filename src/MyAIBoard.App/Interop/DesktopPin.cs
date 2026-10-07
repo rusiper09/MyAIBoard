@@ -20,6 +20,7 @@ internal sealed class DesktopPin
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
     private static readonly IntPtr HWND_BOTTOM = new(1);
+    private static readonly IntPtr HWND_TOP = IntPtr.Zero;
 
     /// <summary>Broadcast to top-level windows when Explorer (re)creates the taskbar.</summary>
     private static readonly int WM_TASKBARCREATED = (int)RegisterWindowMessage("TaskbarCreated");
@@ -30,6 +31,7 @@ internal sealed class DesktopPin
 
     private readonly IntPtr _hwnd;
     private IntPtr _originalOwner;
+    private bool _raised;
 
     public bool IsPinned { get; private set; }
 
@@ -37,6 +39,24 @@ internal sealed class DesktopPin
     {
         _hwnd = new WindowInteropHelper(window).EnsureHandle();
         HwndSource.FromHwnd(_hwnd)!.AddHook(WndProc);
+        window.Deactivated += (_, _) =>
+        {
+            if (!_raised) return;
+            _raised = false;
+            if (IsPinned) SendToBottom();
+        };
+    }
+
+    /// <summary>
+    /// Brings a pinned window above other windows until it loses focus, then it sinks back
+    /// to the desktop (e.g. when the user summons it to write a memo).
+    /// </summary>
+    public void RaiseUntilDeactivated()
+    {
+        if (!IsPinned) return;
+
+        _raised = true;
+        SetWindowPos(_hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
     }
 
     public void Pin()
@@ -95,7 +115,7 @@ internal sealed class DesktopPin
         }
 
         // Whenever Windows tries to raise the window (click, activation), keep it at the bottom.
-        if (msg == WM_WINDOWPOSCHANGING && IsPinned)
+        if (msg == WM_WINDOWPOSCHANGING && IsPinned && !_raised)
         {
             var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
             if ((pos.flags & SWP_NOZORDER) == 0)

@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _purgeTimer;
     private readonly TrayIcon? _tray;
     private DesktopPin? _desktopPin;
+    private GlobalHotkey? _newMemoHotkey;
     private bool _exiting;
     private long _lastRevision = -1;
     private DateTime _lastReload;
@@ -80,6 +81,7 @@ public partial class MainWindow : Window
             GlassBackdrop.Apply(this, (double)FindResource("WidgetCornerRadiusValue"));
             _desktopPin = new DesktopPin(this);
             ApplyMode(_settings.Mode);
+            RegisterNewMemoHotkey();
         };
         Loaded += (_, _) =>
         {
@@ -98,6 +100,7 @@ public partial class MainWindow : Window
                 return;
             }
             SavePlacement();
+            _newMemoHotkey?.Dispose();
             _tray?.Dispose();
         };
         _tray = new TrayIcon(BoardMenu, ToggleVisibility);
@@ -728,13 +731,34 @@ public partial class MainWindow : Window
         else ShowWidget();
     }
 
-    /// <summary>Shows the widget and brings it forward (a desktop-pinned widget stays under other windows).</summary>
+    /// <summary>Shows the widget and brings it forward; a desktop-pinned widget sinks back once it loses focus.</summary>
     public void ShowWidget()
     {
         Show();
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
+        _desktopPin?.RaiseUntilDeactivated();
         Activate();
+    }
+
+    // ───────────── Global shortcut ─────────────
+
+    /// <summary>The system-wide shortcut from settings (Ctrl+Alt+M by default) opens a new memo from anywhere.</summary>
+    private void RegisterNewMemoHotkey()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.NewMemoHotkey)) return; // turned off in settings.json
+
+        _newMemoHotkey = GlobalHotkey.TryRegister(this, _settings.NewMemoHotkey, NewMemoFromHotkey, out var error);
+        NewMemoMenuItem.InputGestureText = _newMemoHotkey?.Gesture ?? "";
+        NewMemoButton.ToolTip = _newMemoHotkey is null ? "새 메모" : $"새 메모 ({_newMemoHotkey.Gesture})";
+        if (error is not null)
+            ShowNotice(error);
+    }
+
+    private void NewMemoFromHotkey()
+    {
+        ShowWidget();
+        NewMemo_Click(this, new RoutedEventArgs());
     }
 
     private void Autostart_Click(object sender, RoutedEventArgs e)
