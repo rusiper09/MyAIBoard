@@ -15,7 +15,9 @@ public static class BoardTools
         "\"add this to aiboard\". Write a short, scannable title and put details (context, file paths, next steps) " +
         "in the body so the user can pick the task up later without this conversation. " +
         "Wrap file paths and URLs in single quotes, e.g. 'E:\\Project\\app\\Program.cs' or 'https://example.com': " +
-        "only quoted ones become clickable links on the board, and quotes keep paths with spaces in one piece.")]
+        "only quoted ones become clickable links on the board, and quotes keep paths with spaces in one piece. " +
+        "Hashtags like #bug in the title or body tag the memo; the folder this session works in is added as a tag " +
+        "automatically (e.g. #MyAIBoard), so don't add that one yourself.")]
     public static Memo AddMemo(
         MemoStore store,
         McpServer server,
@@ -25,15 +27,21 @@ public static class BoardTools
         if (string.IsNullOrWhiteSpace(title))
             throw new McpException("title must not be empty.");
 
-        return store.Add(title.Trim(), body, SourceName(server));
+        return store.Add(title.Trim(), WithFolderTag(title, body, Environment.CurrentDirectory), SourceName(server));
     }
 
     [McpServerTool(Name = "list_memos", ReadOnly = true)]
-    [Description("List memos on the user's MyAIBoard in board order. Optionally filter by text in the title or body.")]
+    [Description(
+        "List memos on the user's MyAIBoard in board order. Optionally filter by text in the title or body, " +
+        "and/or by hashtag (e.g. tag \"MyAIBoard\" for memos about that project folder).")]
     public static IReadOnlyList<Memo> ListMemos(
         MemoStore store,
-        [Description("Optional text to search for in titles and bodies.")] string? query = null) =>
-        string.IsNullOrWhiteSpace(query) ? store.GetAll() : store.Search(query.Trim());
+        [Description("Optional text to search for in titles and bodies.")] string? query = null,
+        [Description("Optional hashtag, with or without '#'. Matches the whole tag, case-insensitively.")] string? tag = null)
+    {
+        var memos = string.IsNullOrWhiteSpace(query) ? store.GetAll() : store.Search(query.Trim());
+        return string.IsNullOrWhiteSpace(tag) ? memos : memos.Where(m => MemoTags.Has(m, tag.Trim())).ToList();
+    }
 
     [McpServerTool(Name = "get_memo", ReadOnly = true)]
     [Description("Get a single memo from MyAIBoard by id.")]
@@ -71,6 +79,18 @@ public static class BoardTools
         store.Restore(id)
             ? store.Get(id) ?? throw new McpException($"Memo {id} was deleted again.")
             : throw new McpException($"Memo {id} is not in the trash.");
+
+    /// <summary>
+    /// Appends the session folder's tag to the body unless the memo already has it.
+    /// A stdio MCP server runs in the folder of the AI session that started it.
+    /// </summary>
+    internal static string WithFolderTag(string title, string body, string folder)
+    {
+        if (MemoTags.FromFolder(folder) is not { } tag) return body;
+        if (MemoTags.Parse(title + "\n" + body).Contains(tag, MemoTags.Comparer)) return body;
+
+        return string.IsNullOrWhiteSpace(body) ? $"#{tag}" : $"{body.TrimEnd()}\n\n#{tag}";
+    }
 
     /// <summary>Turns the connecting client's name into a friendly source label, e.g. "claude-code" → "Claude".</summary>
     internal static string SourceName(McpServer server)

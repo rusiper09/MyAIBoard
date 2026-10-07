@@ -275,4 +275,10 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+
+    <!-- Hashtags in memos: click to filter the board by that tag. -->
+    <SolidColorBrush x:Key="TagText" Color="#C9B8FF" />
+    <Style x:Key="TagLink" TargetType="Hyperlink" BasedOn="{StaticResource {x:Type Hyperlink}}">
+        <Setter Property="Foreground" Value="{StaticResource TagText}" />
+    </Style>
 </ResourceDictionary>

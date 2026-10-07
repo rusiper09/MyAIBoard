@@ -49,6 +49,7 @@
               TextElement.Foreground="{StaticResource TextPrimary}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
@@ -67,6 +68,8 @@
                     </Border>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="SearchButton" Style="{StaticResource IconButton}" Content="&#xE721;"
+                            ToolTip="검색 (Ctrl+F)" Click="SearchButton_Click" Margin="0,0,6,0" />
                     <Button x:Name="NewMemoButton" Style="{StaticResource IconButton}" Content="&#xE710;"
                             ToolTip="새 메모" Click="NewMemo_Click" Margin="0,0,6,0" />
                     <Button x:Name="EmptyTrashButton" Style="{StaticResource IconButton}" Content="&#xE74D;"
@@ -76,7 +79,17 @@
                 </StackPanel>
             </Grid>
 
-            <ScrollViewer x:Name="MemoScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+            <!-- Search: words match title/body, #tags must all be present. Esc clears. -->
+            <Grid x:Name="SearchBar" Grid.Row="1" Margin="0,0,0,10" Visibility="Collapsed">
+                <TextBox x:Name="SearchBox" Style="{StaticResource GlassTextBox}" Tag="검색 또는 #태그"
+                         FontSize="13" TextWrapping="NoWrap" Padding="8,5,30,5"
+                         TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                <Button Style="{StaticResource CardIconButton}" Content="&#xE711;" ToolTip="검색 닫기 (Esc)"
+                        HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
+                        Click="CloseSearch_Click" />
+            </Grid>
+
+            <ScrollViewer x:Name="MemoScroller" Grid.Row="2" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled" Padding="0,0,2,0" Background="Transparent"
                           FocusVisualStyle="{x:Null}"
                           AllowDrop="True" DragOver="MemoScroller_DragOver" DragLeave="MemoScroller_DragLeave"
@@ -109,7 +122,7 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock x:Name="TitleText" Text="{Binding Title}" FontSize="14"
+                                            <TextBlock x:Name="TitleText" local:LinkText.Text="{Binding Title}" FontSize="14"
                                                        FontWeight="SemiBold" Foreground="{StaticResource CardTextPrimary}"
                                                        TextWrapping="Wrap" VerticalAlignment="Center" />
                                             <Button x:Name="CollapseButton" Grid.Column="1" Style="{StaticResource CardIconButton}"
@@ -241,7 +254,7 @@
             </ScrollViewer>
 
             <!-- Accent line showing where a dragged memo will land. -->
-            <Canvas x:Name="DropLayer" Grid.Row="1" IsHitTestVisible="False">
+            <Canvas x:Name="DropLayer" Grid.Row="2" IsHitTestVisible="False">
                 <Border x:Name="DropIndicator" Height="2" CornerRadius="1" Background="{StaticResource Accent}"
                         Visibility="Collapsed">
                     <Border.Effect>
@@ -250,13 +263,13 @@
                 </Border>
             </Canvas>
 
-            <TextBlock x:Name="EmptyText" Grid.Row="1" TextAlignment="Center" VerticalAlignment="Center"
+            <TextBlock x:Name="EmptyText" Grid.Row="2" TextAlignment="Center" VerticalAlignment="Center"
                        TextWrapping="Wrap" FontSize="13" LineHeight="20" Margin="12,0,12,24"
                        Foreground="{StaticResource TextSecondary}" Effect="{StaticResource TextLift}"
                        IsHitTestVisible="False" />
 
             <!-- Short notice, e.g. when an AI change cancelled an edit. -->
-            <Border x:Name="NoticeToast" Grid.Row="1" VerticalAlignment="Top" HorizontalAlignment="Center"
+            <Border x:Name="NoticeToast" Grid.Row="2" VerticalAlignment="Top" HorizontalAlignment="Center"
                     Margin="0,4,0,0" Padding="14,7" CornerRadius="16" Visibility="Collapsed" IsHitTestVisible="False"
                     Background="{StaticResource PopupFill}" BorderBrush="{StaticResource CardRim}" BorderThickness="1">
                 <TextBlock x:Name="NoticeText" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
@@ -264,7 +277,7 @@
             </Border>
 
             <!-- Undo toast after a delete. -->
-            <Border x:Name="UndoToast" Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+            <Border x:Name="UndoToast" Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Center"
                     Margin="0,0,0,10" Padding="14,6,6,6" CornerRadius="16" Visibility="Collapsed"
                     Background="{StaticResource PopupFill}" BorderBrush="{StaticResource CardRim}" BorderThickness="1">
                 <StackPanel Orientation="Horizontal">

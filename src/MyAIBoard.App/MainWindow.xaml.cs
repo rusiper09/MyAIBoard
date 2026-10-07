@@ -102,6 +102,7 @@ public partial class MainWindow : Window
         };
         _tray = new TrayIcon(BoardMenu, ToggleVisibility);
         LinkText.OpenFailed += ShowNotice;
+        LinkText.TagClicked += FilterByTag;
 
         // The menu button anchors the menu under itself; right-click elsewhere opens it at the cursor.
         BoardMenu.Closed += (_, _) =>
@@ -123,7 +124,8 @@ public partial class MainWindow : Window
             if (!force && revision == _lastRevision && DateTime.UtcNow - _lastReload < RelativeTimeRefresh)
                 return;
 
-            SyncItems(_showingTrash ? _store.GetDeleted() : Sort(_store.GetAll()), DateTimeOffset.UtcNow);
+            var memos = _showingTrash ? _store.GetDeleted() : Sort(_store.GetAll());
+            SyncItems(ApplySearch(memos), DateTimeOffset.UtcNow);
             UpdateChrome();
 
             _lastRevision = revision;
@@ -186,20 +188,97 @@ public partial class MainWindow : Window
 
     private int DraftOffset => _items.Count > 0 && _items[0].IsDraft ? 1 : 0;
 
+    private bool IsSearching => SearchBox.Text.Trim().Length > 0;
+
+    /// <summary>
+    /// Keeps the memos matching the search box: every "#tag" must be on the memo and every other word
+    /// must appear in its title or body. A memo being edited stays visible so the edit is not lost.
+    /// </summary>
+    private IReadOnlyList<Memo> ApplySearch(IReadOnlyList<Memo> memos)
+    {
+        var terms = SearchBox.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (terms.Length == 0) return memos;
+
+        var tags = terms.Where(t => t.Length > 1 && t[0] == '#').Select(t => t[1..]).ToList();
+        var words = terms.Where(t => t[0] != '#').ToList();
+        var editing = _items.Where(i => i.IsEditing && !i.IsDraft).Select(i => i.Id).ToHashSet();
+
+        return memos.Where(m => editing.Contains(m.Id) || Matches(m)).ToList();
+
+        bool Matches(Memo memo)
+        {
+            var memoTags = MemoTags.Of(memo);
+            return tags.All(tag => memoTags.Contains(tag, MemoTags.Comparer))
+                   && words.All(word => memo.Title.Contains(word, StringComparison.CurrentCultureIgnoreCase)
+                                        || memo.Body.Contains(word, StringComparison.CurrentCultureIgnoreCase));
+        }
+    }
+
     private void UpdateChrome()
     {
         var count = _items.Count(item => !item.IsDraft);
         CountText.Text = count.ToString();
         CountPill.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyText.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyText.Text = _showingTrash
-            ? $"휴지통이 비어 있어요.\n삭제한 메모는 {TrashRetention.Days}일 동안 여기 보관돼요."
+        EmptyText.Text = IsSearching ? $"\"{SearchBox.Text.Trim()}\"에 맞는 메모가 없어요."
+            : _showingTrash ? $"휴지통이 비어 있어요.\n삭제한 메모는 {TrashRetention.Days}일 동안 여기 보관돼요."
             : "아직 메모가 없어요.\nAI에게 \"aiboard에 추가해\"라고 말해보세요.";
 
         HeaderTitle.Text = _showingTrash ? "휴지통" : "AI Board";
         BackButton.Visibility = _showingTrash ? Visibility.Visible : Visibility.Collapsed;
         NewMemoButton.Visibility = _showingTrash ? Visibility.Collapsed : Visibility.Visible;
         EmptyTrashButton.Visibility = _showingTrash && count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ───────────── Search ─────────────
+
+    private void SearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SearchBar.Visibility == Visibility.Visible && !IsSearching) CloseSearch();
+        else OpenSearch();
+    }
+
+    private void OpenSearch(string? text = null)
+    {
+        SearchBar.Visibility = Visibility.Visible;
+        if (text is not null)
+            SearchBox.Text = text; // TextChanged reloads the list
+        SearchBox.Focus();
+        SearchBox.CaretIndex = SearchBox.Text.Length;
+    }
+
+    private void CloseSearch()
+    {
+        SearchBar.Visibility = Visibility.Collapsed;
+        SearchBox.Text = "";
+    }
+
+    private void CloseSearch_Click(object sender, RoutedEventArgs e) => CloseSearch();
+
+    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        MemoScroller.ScrollToTop();
+        ReloadIfChanged(force: true);
+    }
+
+    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape) return;
+        CloseSearch();
+        e.Handled = true;
+    }
+
+    /// <summary>Clicking a #tag on a card shows only memos with that tag.</summary>
+    private void FilterByTag(string tag) => OpenSearch($"#{tag}");
+
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        base.OnPreviewKeyDown(e);
+        if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            OpenSearch();
+            e.Handled = true;
+        }
     }
 
     /// <summary>Runs a store write; on failure (e.g. database locked) the board simply resyncs.</summary>
@@ -440,7 +519,15 @@ public partial class MainWindow : Window
 
     private void EmptyTrash_Click(object sender, RoutedEventArgs e)
     {
-        var count = _items.Count(i => i.IsDeleted);
+        int count;
+        try
+        {
+            count = _store.GetDeleted().Count; // all of the trash, even while a search hides some
+        }
+        catch (SqliteException)
+        {
+            return;
+        }
         if (count == 0) return;
 
         var answer = MessageBox.Show(this, $"휴지통의 메모 {count}개를 영구 삭제할까요?\n되돌릴 수 없어요.",
@@ -469,7 +556,7 @@ public partial class MainWindow : Window
         var startedOnControl = FindAncestor<ButtonBase>(e.OriginalSource) is not null
                                || FindAncestor<TextBoxBase>(e.OriginalSource) is not null
                                || FindAncestor<Hyperlink>(e.OriginalSource) is not null;
-        _dragCandidate = _settings.Sort == SortMode.Manual && !_showingTrash && !startedOnControl
+        _dragCandidate = _settings.Sort == SortMode.Manual && !_showingTrash && !IsSearching && !startedOnControl
                          && ItemOf(sender) is { IsEditing: false, IsDraft: false } item
             ? item
             : null;

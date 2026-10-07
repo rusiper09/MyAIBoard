@@ -4,11 +4,13 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using MyAIBoard.Core;
 
 namespace MyAIBoard.App;
 
 /// <summary>
-/// Attached property that fills a TextBlock with text whose web links and Windows paths are clickable.
+/// Attached property that fills a TextBlock with text whose quoted web links and Windows paths,
+/// and hashtags, are clickable.
 /// Use <c>local:LinkText.Text="{Binding Body}"</c> in place of <c>Text</c>.
 /// </summary>
 /// <remarks>
@@ -26,9 +28,13 @@ public static partial class LinkText
     /// <summary>Raised when a clicked link cannot be opened, with a message for the user.</summary>
     public static event Action<string>? OpenFailed;
 
+    /// <summary>Raised when a hashtag is clicked, with the tag (without "#").</summary>
+    public static event Action<string>? TagClicked;
+
     // Only text in single quotes becomes a link, so paths may contain spaces:
     // 'https://...', 'C:\Program Files\x', '\\server\share', '%LOCALAPPDATA%\x'.
-    [GeneratedRegex("""'(?<link>(?:https?://|[A-Za-z]:\\|\\\\|%[A-Za-z_][A-Za-z0-9_]*%\\)[^'\r\n]+)'""")]
+    // Hashtags (see MemoTags) are links too, and filter the board when clicked.
+    [GeneratedRegex("""'(?<link>(?:https?://|[A-Za-z]:\\|\\\\|%[A-Za-z_][A-Za-z0-9_]*%\\)[^'\r\n]+)'|""" + MemoTags.Pattern)]
     private static partial Regex LinkPattern();
 
     private static void OnTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -40,18 +46,34 @@ public static partial class LinkText
         var position = 0;
         foreach (Match match in LinkPattern().Matches(text))
         {
-            // The link is the part inside the quotes; the quotes stay plain text.
-            var group = match.Groups["link"];
-            var link = group.Value.Trim();
-            if (link.Length == 0) continue;
+            Hyperlink hyperlink;
+            Group shown;
+            if (match.Groups["tag"] is { Success: true } tagGroup)
+            {
+                var tag = tagGroup.Value;
+                if (!MemoTags.IsTag(tag)) continue;
 
-            if (group.Index > position)
-                block.Inlines.Add(new Run(text[position..group.Index]));
+                shown = match.Groups[0]; // "#tag", including the "#"
+                hyperlink = new Hyperlink(new Run(shown.Value)) { ToolTip = $"#{tag} 메모만 보기" };
+                if (block.TryFindResource("TagLink") is Style tagStyle)
+                    hyperlink.Style = tagStyle;
+                hyperlink.Click += (_, _) => TagClicked?.Invoke(tag);
+            }
+            else
+            {
+                // The link is the part inside the quotes; the quotes stay plain text.
+                shown = match.Groups["link"];
+                var link = shown.Value.Trim();
+                if (link.Length == 0) continue;
 
-            var hyperlink = new Hyperlink(new Run(group.Value)) { ToolTip = link };
-            hyperlink.Click += (_, _) => Open(link);
+                hyperlink = new Hyperlink(new Run(shown.Value)) { ToolTip = link };
+                hyperlink.Click += (_, _) => Open(link);
+            }
+
+            if (shown.Index > position)
+                block.Inlines.Add(new Run(text[position..shown.Index]));
             block.Inlines.Add(hyperlink);
-            position = group.Index + group.Value.Length;
+            position = shown.Index + shown.Length;
         }
         if (position < text.Length)
             block.Inlines.Add(new Run(text[position..]));
