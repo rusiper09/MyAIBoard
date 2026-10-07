@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -100,6 +101,7 @@ public partial class MainWindow : Window
             _tray?.Dispose();
         };
         _tray = new TrayIcon(BoardMenu, ToggleVisibility);
+        LinkText.OpenFailed += ShowNotice;
 
         // The menu button anchors the menu under itself; right-click elsewhere opens it at the cursor.
         BoardMenu.Closed += (_, _) =>
@@ -235,8 +237,8 @@ public partial class MainWindow : Window
 
     private void Card_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // Double-click a card to edit it.
-        if (e.ClickCount == 2 && ItemOf(sender) is { IsEditing: false, IsDeleted: false } item)
+        // Double-click a card to edit it (but not a link in it).
+        if (e.ClickCount == 2 && FindAncestor<Hyperlink>(e.OriginalSource) is null && ItemOf(sender) is { IsEditing: false, IsDeleted: false } item)
         {
             item.BeginEdit();
             e.Handled = true;
@@ -465,7 +467,8 @@ public partial class MainWindow : Window
     {
         _dragStart = e.GetPosition(this);
         var startedOnControl = FindAncestor<ButtonBase>(e.OriginalSource) is not null
-                               || FindAncestor<TextBoxBase>(e.OriginalSource) is not null;
+                               || FindAncestor<TextBoxBase>(e.OriginalSource) is not null
+                               || FindAncestor<Hyperlink>(e.OriginalSource) is not null;
         _dragCandidate = _settings.Sort == SortMode.Manual && !_showingTrash && !startedOnControl
                          && ItemOf(sender) is { IsEditing: false, IsDraft: false } item
             ? item

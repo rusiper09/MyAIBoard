@@ -264,4 +264,15 @@
             </Setter.Value>
         </Setter>
     </Style>
+    <!-- Links in memo bodies (see LinkText): accent colored, underlined on hover. -->
+    <Style TargetType="Hyperlink">
+        <Setter Property="Foreground" Value="{StaticResource Accent}" />
+        <Setter Property="TextDecorations" Value="{x:Null}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="TextDecorations" Value="Underline" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 </ResourceDictionary>

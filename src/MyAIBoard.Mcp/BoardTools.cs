@@ -13,7 +13,9 @@ public static class BoardTools
         "Add a memo to the user's MyAIBoard, a memo board widget on their Windows desktop. " +
         "Use this when the user asks to save something for later, e.g. \"aiboard에 추가해\", \"보드에 메모해둬\", " +
         "\"add this to aiboard\". Write a short, scannable title and put details (context, file paths, next steps) " +
-        "in the body so the user can pick the task up later without this conversation.")]
+        "in the body so the user can pick the task up later without this conversation. " +
+        "Wrap file paths and URLs in single quotes, e.g. 'E:\\Project\\app\\Program.cs' or 'https://example.com': " +
+        "only quoted ones become clickable links on the board, and quotes keep paths with spaces in one piece.")]
     public static Memo AddMemo(
         MemoStore store,
         McpServer server,

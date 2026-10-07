@@ -116,7 +116,7 @@
                                                     Content="&#xE70E;" ToolTip="접기" Margin="6,-3,-6,-3"
                                                     VerticalAlignment="Top" Click="ToggleCollapse_Click" />
                                         </Grid>
-                                        <TextBlock x:Name="BodyText" Text="{Binding Body}" FontSize="13" Margin="0,4,0,0"
+                                        <TextBlock x:Name="BodyText" local:LinkText.Text="{Binding Body}" FontSize="13" Margin="0,4,0,0"
                                                    Foreground="{StaticResource CardTextSecondary}" TextWrapping="Wrap"
                                                    LineHeight="19" />
                                         <Grid x:Name="Footer" Margin="0,7,0,0">
