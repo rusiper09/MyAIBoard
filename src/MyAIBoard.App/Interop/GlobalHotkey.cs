@@ -19,7 +19,7 @@ internal sealed class GlobalHotkey : IDisposable
     private readonly HwndSource _source;
     private readonly Action _pressed;
 
-    /// <summary>The gesture that was registered, e.g. "Ctrl+Alt+M".</summary>
+    /// <summary>The gesture that was registered, e.g. "Ctrl+Alt+N".</summary>
     public string Gesture { get; }
 
     private GlobalHotkey(Window window, KeyGesture gesture, string text, Action pressed)
@@ -41,7 +41,7 @@ internal sealed class GlobalHotkey : IDisposable
     }
 
     /// <summary>
-    /// Registers a gesture such as "Ctrl+Alt+M". Returns null, with the reason, if the text is not a valid
+    /// Registers a gesture such as "Ctrl+Alt+N". Returns null, with the reason, if the text is not a valid
     /// gesture or another program already owns the shortcut.
     /// </summary>
     public static GlobalHotkey? TryRegister(Window window, string text, Action pressed, out string? error)

@@ -743,14 +743,16 @@ public partial class MainWindow : Window
 
     // ───────────── Global shortcut ─────────────
 
-    /// <summary>The system-wide shortcut from settings (Ctrl+Alt+M by default) opens a new memo from anywhere.</summary>
+    /// <summary>The system-wide shortcut from settings (Ctrl+Alt+N by default) opens a new memo from anywhere.</summary>
     private void RegisterNewMemoHotkey()
     {
         if (string.IsNullOrWhiteSpace(_settings.NewMemoHotkey)) return; // turned off in settings.json
 
         _newMemoHotkey = GlobalHotkey.TryRegister(this, _settings.NewMemoHotkey, NewMemoFromHotkey, out var error);
-        NewMemoMenuItem.InputGestureText = _newMemoHotkey?.Gesture ?? "";
-        NewMemoButton.ToolTip = _newMemoHotkey is null ? "새 메모" : $"새 메모 ({_newMemoHotkey.Gesture})";
+        // The startup notice is easy to miss, so a failed shortcut also shows in the menu and tooltip.
+        NewMemoMenuItem.InputGestureText = _newMemoHotkey?.Gesture ?? $"{_settings.NewMemoHotkey} 사용 불가";
+        NewMemoButton.ToolTip = _newMemoHotkey is not null ? $"새 메모 ({_newMemoHotkey.Gesture})"
+            : $"새 메모 ({error}, settings.json의 NewMemoHotkey로 바꿀 수 있어요)";
         if (error is not null)
             ShowNotice(error);
     }

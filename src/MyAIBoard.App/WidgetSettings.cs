@@ -39,8 +39,8 @@ public sealed class WidgetSettings
     public WindowMode Mode { get; set; } = WindowMode.Desktop;
     public SortMode Sort { get; set; } = SortMode.Manual;
 
-    /// <summary>System-wide shortcut that opens a new memo, e.g. "Ctrl+Alt+M"; empty turns it off.</summary>
-    public string NewMemoHotkey { get; set; } = "Ctrl+Alt+M";
+    /// <summary>System-wide shortcut that opens a new memo, e.g. "Ctrl+Alt+N"; empty turns it off.</summary>
+    public string NewMemoHotkey { get; set; } = "Ctrl+Alt+N";
 
     public static string FilePath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MyAIBoard", "settings.json");
