@@ -19,6 +19,7 @@ DB 구조는 `PRAGMA user_version`으로 버전을 관리하며, 새 버전이 �
 
 Windows 10/11 (x64). [Releases](../../releases)에서 `MyAIBoard-<버전>-win-x64.zip`을 받아 압축을 풀고, 그 폴더에서 실행합니다.
 .NET이 함께 들어 있어서 따로 설치할 것은 없습니다.
+처음 쓰는 사람을 위한 단계별 안내는 [INSTALL.txt](INSTALL.txt)에 있습니다(zip에도 들어 있음).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1

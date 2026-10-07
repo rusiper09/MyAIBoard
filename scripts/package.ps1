@@ -20,7 +20,7 @@ foreach ($project in 'src\MyAIBoard.App', 'src\MyAIBoard.Mcp') {
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $project" }
 }
 
-foreach ($file in 'scripts\install.ps1', 'scripts\uninstall.ps1', 'scripts\mcp-clients.ps1', 'README.md', 'CHANGELOG.md', 'LICENSE') {
+foreach ($file in 'scripts\install.ps1', 'scripts\uninstall.ps1', 'scripts\mcp-clients.ps1', 'README.md', 'INSTALL.txt', 'CHANGELOG.md', 'LICENSE') {
     $source = Join-Path $root $file
     if (Test-Path $source) { Copy-Item $source $packageDir }
 }
