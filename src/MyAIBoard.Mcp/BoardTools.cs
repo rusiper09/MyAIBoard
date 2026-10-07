@@ -22,12 +22,16 @@ public static class BoardTools
         MemoStore store,
         McpServer server,
         [Description("Short title shown on the board, ideally under 60 characters.")] string title,
-        [Description("Details of the memo. Plain text; may be multi-line.")] string body = "")
+        [Description("Details of the memo. Plain text; may be multi-line.")] string body = "") =>
+        AddMemo(store, title, body, server.ClientInfo?.Name, Environment.CurrentDirectory);
+
+    /// <summary>add_memo without the live connection: the client name and session folder are passed in.</summary>
+    internal static Memo AddMemo(MemoStore store, string title, string body, string? clientName, string folder)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new McpException("title must not be empty.");
 
-        return store.Add(title.Trim(), WithFolderTag(title, body, Environment.CurrentDirectory), SourceName(server));
+        return store.Add(title.Trim(), WithFolderTag(title, body, folder), SourceName(clientName));
     }
 
     [McpServerTool(Name = "list_memos", ReadOnly = true)]
@@ -93,9 +97,9 @@ public static class BoardTools
     }
 
     /// <summary>Turns the connecting client's name into a friendly source label, e.g. "claude-code" → "Claude".</summary>
-    internal static string SourceName(McpServer server)
+    internal static string SourceName(string? clientName)
     {
-        var name = server.ClientInfo?.Name ?? "";
+        var name = clientName ?? "";
         if (name.Contains("claude", StringComparison.OrdinalIgnoreCase)) return "Claude";
         if (name.Contains("codex", StringComparison.OrdinalIgnoreCase)) return "Codex";
         return string.IsNullOrWhiteSpace(name) ? "AI" : name;
