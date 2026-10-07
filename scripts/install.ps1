@@ -1,7 +1,9 @@
 # Builds MyAIBoard and installs it for the current user:
-#   %LOCALAPPDATA%\MyAIBoard\bin\MyAIBoard.exe      (widget)
-#   %LOCALAPPDATA%\MyAIBoard\bin\MyAIBoard.Mcp.exe  (MCP server for Claude Code / Codex)
+#   %USERPROFILE%\.myaiboard\bin\MyAIBoard.exe      (widget)
+#   %USERPROFILE%\.myaiboard\bin\MyAIBoard.Mcp.exe  (MCP server for Claude Code / Codex)
 # plus a Start menu shortcut and, unless -NoAutostart, a "run at sign-in" entry.
+# The board itself lives next to it (%USERPROFILE%\.myaiboard\board.db). Not AppData: Store-packaged
+# apps such as the Codex desktop app, and the MCP servers they start, only see a virtualized AppData.
 #
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/install.ps1 [-NoAutostart] [-NoLaunch]
 param(
@@ -11,7 +13,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$installDir = Join-Path $env:LOCALAPPDATA 'MyAIBoard\bin'
+$dataDir = Join-Path $env:USERPROFILE '.myaiboard'
+$installDir = Join-Path $dataDir 'bin'
+$legacyDir = Join-Path $env:LOCALAPPDATA 'MyAIBoard'
 $staging = Join-Path $root 'artifacts\publish'
 
 Write-Host '==> Building' -ForegroundColor Cyan
@@ -26,6 +30,16 @@ Write-Host '==> Installing to' $installDir -ForegroundColor Cyan
 Get-Process MyAIBoard, MyAIBoard.App -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 New-Item -ItemType Directory -Force $installDir | Out-Null
+
+# Earlier versions kept everything in %LOCALAPPDATA%\MyAIBoard. Copy the board and settings over
+# once (the WAL file holds the latest writes); the old folder is left for you to delete.
+if ((Test-Path (Join-Path $legacyDir 'board.db')) -and -not (Test-Path (Join-Path $dataDir 'board.db'))) {
+    Write-Host '==> Moving the board from' $legacyDir -ForegroundColor Cyan
+    foreach ($name in 'board.db', 'board.db-wal', 'settings.json') {
+        $source = Join-Path $legacyDir $name
+        if (Test-Path $source) { Copy-Item $source (Join-Path $dataDir $name) }
+    }
+}
 
 # Leftovers from earlier updates whose processes have since exited.
 Get-ChildItem $installDir -Recurse -Filter '*.old-*' | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -50,22 +64,6 @@ if ($renamed -gt 0) {
 
 $exe = Join-Path $installDir 'MyAIBoard.exe'
 
-# The Codex desktop app runs MCP servers as sandbox accounts (group CodexSandboxUsers), which
-# cannot see this folder by default. Let them use the board: modify in the data folder (the
-# database and its WAL files), but only read/execute in bin, so a sandboxed agent cannot
-# replace programs that later run as you. Codex must also be given MYAIBOARD_DB (see README),
-# because the sandbox account has its own %LOCALAPPDATA%.
-$sandboxGroup = 'CodexSandboxUsers'
-if (Get-LocalGroup -Name $sandboxGroup -ErrorAction SilentlyContinue) {
-    Write-Host "==> Access for the Codex sandbox ($sandboxGroup)" -ForegroundColor Cyan
-    $dataDir = Split-Path $installDir -Parent
-    icacls $dataDir /grant "${sandboxGroup}:(OI)(CI)M" | Out-Null
-    icacls $installDir /inheritance:d | Out-Null
-    icacls $installDir /remove:g $sandboxGroup /T | Out-Null
-    icacls $installDir /grant "${sandboxGroup}:(OI)(CI)RX" /T | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Warning "Could not set folder permissions for $sandboxGroup." }
-}
-
 Write-Host '==> Start menu shortcut' -ForegroundColor Cyan
 $shortcutPath = Join-Path ([Environment]::GetFolderPath('Programs')) 'MyAIBoard.lnk'
 $shell = New-Object -ComObject WScript.Shell
@@ -78,7 +76,14 @@ $shortcut.Save()
 
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 if ($NoAutostart) {
-    Write-Host '==> Autostart skipped (-NoAutostart)' -ForegroundColor Cyan
+    # Leave the choice alone, but keep an existing entry pointing at this install.
+    if (Get-ItemProperty -Path $runKey -Name 'MyAIBoard' -ErrorAction SilentlyContinue) {
+        Set-ItemProperty -Path $runKey -Name 'MyAIBoard' -Value "`"$exe`""
+        Write-Host '==> Autostart kept (path updated)' -ForegroundColor Cyan
+    }
+    else {
+        Write-Host '==> Autostart skipped (-NoAutostart)' -ForegroundColor Cyan
+    }
 }
 else {
     Write-Host '==> Autostart at sign-in (turn off from the widget menu)' -ForegroundColor Cyan

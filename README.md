@@ -7,7 +7,7 @@ Windows 바탕화면에 떠 있는 글래스 스타일 메모 위젯입니다. C
 
 | 프로젝트 | 역할 |
 |---|---|
-| `src/MyAIBoard.Core` | SQLite 메모 저장소 (`%LOCALAPPDATA%\MyAIBoard\board.db`, `MYAIBOARD_DB`로 경로 변경 가능), 해시태그, 내보내기 |
+| `src/MyAIBoard.Core` | SQLite 메모 저장소 (`%USERPROFILE%\.myaiboard\board.db`, `MYAIBOARD_DB`로 경로 변경 가능), 해시태그, 내보내기 |
 | `src/MyAIBoard.App` | WPF 위젯 (`MyAIBoard.exe`) |
 | `src/MyAIBoard.Mcp` | MCP stdio 서버 (`MyAIBoard.Mcp.exe`) |
 | `tests/` | Core 테스트, MCP 서버 테스트(도구 단위 + 실제 stdio 접속) |
@@ -23,7 +23,9 @@ DB 구조는 `PRAGMA user_version`으로 버전을 관리하며, 새 버전이 �
 powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 ```
 
-`%LOCALAPPDATA%\MyAIBoard\bin`에 설치하고, 시작 메뉴 바로가기와 로그인 시 자동 실행을 등록한 뒤 위젯을 띄웁니다.
+`%USERPROFILE%\.myaiboard\bin`에 설치하고, 시작 메뉴 바로가기와 로그인 시 자동 실행을 등록한 뒤 위젯을 띄웁니다.
+보드(`board.db`)와 설정도 `%USERPROFILE%\.myaiboard`에 있습니다. AppData를 쓰지 않는 이유: Codex 앱처럼 스토어(MSIX)로 설치된 앱과 그 앱이 띄운 MCP 서버는 가상화된 AppData만 보기 때문에, AppData에 두면 그쪽에서는 보드가 보이지 않습니다.
+예전 버전(`%LOCALAPPDATA%\MyAIBoard`)에서 업데이트하면 보드와 설정을 한 번 복사해 옵니다. 옛 폴더는 확인 후 지워도 됩니다.
 다시 실행하면 업데이트됩니다. 자동 실행 설정을 건드리지 않으려면 `-NoAutostart`를 붙이세요(위젯 메뉴에서도 끌 수 있습니다).
 AI 세션이 실행 중인 MCP 서버는 그 세션을 다시 시작해야 새 버전으로 바뀝니다.
 
@@ -32,18 +34,16 @@ AI 세션이 실행 중인 MCP 서버는 그 세션을 다시 시작해야 새 �
 Claude Code:
 
 ```powershell
-claude mcp add --scope user myaiboard -- "$env:LOCALAPPDATA\MyAIBoard\bin\MyAIBoard.Mcp.exe"
+claude mcp add --scope user myaiboard -- "$env:USERPROFILE\.myaiboard\bin\MyAIBoard.Mcp.exe"
 ```
 
 Codex (CLI가 PATH에 없으면 Codex 앱에 들어 있는 `codex.exe`를 쓰면 됩니다):
 
 ```powershell
-codex mcp add myaiboard --env "MYAIBOARD_DB=$env:LOCALAPPDATA\MyAIBoard\board.db" -- "$env:LOCALAPPDATA\MyAIBoard\bin\MyAIBoard.Mcp.exe"
+codex mcp add myaiboard -- "$env:USERPROFILE\.myaiboard\bin\MyAIBoard.Mcp.exe"
 ```
 
-Codex 앱은 MCP 서버를 샌드박스 계정(`CodexSandboxUsers` 그룹)으로 실행합니다. 그래서 두 가지가 필요합니다.
-- `MYAIBOARD_DB`: 샌드박스 계정의 `%LOCALAPPDATA%`는 다른 폴더라서, 지정하지 않으면 위젯과 다른 빈 보드를 씁니다.
-- 폴더 권한: `install.ps1`이 이 그룹을 찾으면 `%LOCALAPPDATA%\MyAIBoard`에 수정 권한을, `bin`에는 읽기·실행 권한만 줍니다. 권한이 없으면 Codex 로그에 `MCP startup failed ... (os error 3)`이 남습니다. Codex를 나중에 설치했다면 `install.ps1`을 다시 실행하세요.
+Codex 앱에서 `MCP startup failed ... (os error 3)`이 나면, MCP 서버 경로가 AppData 안에 있지 않은지 확인하세요.
 
 등록한 뒤 새로 시작한 세션부터 적용됩니다. Codex 앱은 다시 시작하세요.
 
@@ -89,7 +89,7 @@ AI는 메모를 영구 삭제할 수 없습니다. 영구 삭제는 위젯의 �
 
 ## 설정
 
-`%LOCALAPPDATA%\MyAIBoard\settings.json`에 창 위치·크기, 창 모드, 정렬이 저장됩니다.
+`%USERPROFILE%\.myaiboard\settings.json`에 창 위치·크기, 창 모드, 정렬이 저장됩니다.
 `NewMemoHotkey`로 새 메모 단축키를 바꿀 수 있습니다(예: `"Ctrl+Shift+Space"`, 빈 값이면 끔). 위젯을 다시 실행하면 적용됩니다.
 다른 프로그램이 이미 쓰는 단축키라 등록하지 못하면, 메뉴의 "새 메모" 옆에 "사용 불가"가 표시됩니다.
 

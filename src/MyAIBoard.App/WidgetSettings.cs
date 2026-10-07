@@ -43,7 +43,7 @@ public sealed class WidgetSettings
     public string NewMemoHotkey { get; set; } = "Ctrl+Alt+N";
 
     public static string FilePath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MyAIBoard", "settings.json");
+        Path.Combine(MyAIBoard.Core.BoardPaths.DataDirectory, "settings.json");
 
     public static WidgetSettings Load()
     {
