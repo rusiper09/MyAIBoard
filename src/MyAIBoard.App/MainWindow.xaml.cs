@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan RelativeTimeRefresh = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan UndoWindow = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan NoticeDuration = TimeSpan.FromSeconds(4);
     private static readonly TimeSpan TrashRetention = TimeSpan.FromDays(30);
     private static readonly TimeSpan TrashPurgeInterval = TimeSpan.FromHours(1);
     private static readonly StringComparer TitleComparer =
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _pollTimer;
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _undoTimer;
+    private readonly DispatcherTimer _noticeTimer;
     private readonly DispatcherTimer _purgeTimer;
     private readonly TrayIcon? _tray;
     private DesktopPin? _desktopPin;
@@ -64,6 +66,9 @@ public partial class MainWindow : Window
 
         _undoTimer = new DispatcherTimer { Interval = UndoWindow };
         _undoTimer.Tick += (_, _) => HideUndoToast();
+
+        _noticeTimer = new DispatcherTimer { Interval = NoticeDuration };
+        _noticeTimer.Tick += (_, _) => { _noticeTimer.Stop(); NoticeToast.Visibility = Visibility.Collapsed; };
 
         // Memos older than the retention period leave the trash for good.
         _purgeTimer = new DispatcherTimer { Interval = TrashPurgeInterval };
@@ -138,15 +143,19 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Makes the bound collection match the store, reusing existing items so their cards stay put.
-    /// An unsaved draft, if any, stays pinned at the top.
+    /// An unsaved draft, if any, stays pinned at the top. Changes made elsewhere (by an AI) win
+    /// over an open editor: the edit is dropped and the user gets a notice.
     /// </summary>
     private void SyncItems(IReadOnlyList<Memo> memos, DateTimeOffset now)
     {
         var ids = memos.Select(m => m.Id).ToHashSet();
         for (var i = _items.Count - 1; i >= 0; i--)
         {
-            if (!_items[i].IsDraft && !ids.Contains(_items[i].Id))
-                _items.RemoveAt(i);
+            if (_items[i].IsDraft || ids.Contains(_items[i].Id)) continue;
+
+            if (_items[i].IsEditing)
+                ShowNotice("편집 중이던 메모를 AI가 삭제했어요");
+            _items.RemoveAt(i);
         }
 
         var offset = DraftOffset;
@@ -161,6 +170,11 @@ public partial class MainWindow : Window
                 continue;
             }
 
+            if (existing.IsEditing && memo.UpdatedAt != existing.EditBaseUpdatedAt)
+            {
+                existing.EndEdit();
+                ShowNotice("AI가 이 메모를 수정해서 편집을 취소했어요");
+            }
             existing.Update(memo, now);
             var currentIndex = _items.IndexOf(existing);
             if (currentIndex != target)
@@ -305,8 +319,22 @@ public partial class MainWindow : Window
         else
         {
             item.EndEdit();
-            Write(() => _store.Update(item.Id, title, body));
+            Write(() =>
+            {
+                // Only save over the version the editor started from; if an AI changed it
+                // in the meantime, its change wins.
+                if (_store.Update(item.Id, title, body, item.EditBaseUpdatedAt) is null)
+                    ShowNotice("AI가 먼저 수정해서 내 편집은 저장하지 않았어요");
+            });
         }
+    }
+
+    private void ShowNotice(string text)
+    {
+        NoticeText.Text = text;
+        NoticeToast.Visibility = Visibility.Visible;
+        _noticeTimer.Stop();
+        _noticeTimer.Start();
     }
 
     private void CancelEdit(MemoItem item)

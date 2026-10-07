@@ -35,6 +35,10 @@ public sealed class MemoItem : INotifyPropertyChanged
     public long Id { get; }
     public bool IsDraft => Id == DraftId;
     public DateTimeOffset CreatedAt { get; private set; }
+    public DateTimeOffset UpdatedAt { get; private set; }
+
+    /// <summary>UpdatedAt of the version the open editor started from; a newer one means someone else changed the memo.</summary>
+    public DateTimeOffset EditBaseUpdatedAt { get; private set; }
 
     public string Title { get; private set => SetField(ref field, value); } = "";
     public string Body { get; private set { if (SetField(ref field, value)) OnPropertyChanged(nameof(HasBody)); } } = "";
@@ -59,6 +63,7 @@ public sealed class MemoItem : INotifyPropertyChanged
         Body = memo.Body.Trim();
         Source = memo.Source;
         CreatedAt = memo.CreatedAt;
+        UpdatedAt = memo.UpdatedAt;
         IsDeleted = memo.DeletedAt is not null;
         // The trash view has no collapse button, so show trashed memos in full.
         IsCollapsed = memo.IsCollapsed && !IsDeleted;
@@ -71,6 +76,7 @@ public sealed class MemoItem : INotifyPropertyChanged
     {
         EditTitle = Title;
         EditBody = Body;
+        EditBaseUpdatedAt = UpdatedAt;
         IsEditing = true;
     }
 

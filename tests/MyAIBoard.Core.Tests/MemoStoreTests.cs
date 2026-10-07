@@ -43,6 +43,20 @@ public sealed class MemoStoreTests : IDisposable
     }
 
     [Fact]
+    public void Update_WithExpectedVersion_RefusesToOverwriteNewerChange()
+    {
+        var original = _store.Add("title", "body", "User");
+        Thread.Sleep(5);
+        var aiEdit = _store.Update(original.Id, body: "AI body")!;
+
+        Assert.Null(_store.Update(original.Id, body: "my body", expectedUpdatedAt: original.UpdatedAt));
+        Assert.Equal("AI body", _store.Get(original.Id)!.Body);
+
+        Assert.NotNull(_store.Update(original.Id, body: "my body", expectedUpdatedAt: aiEdit.UpdatedAt));
+        Assert.Equal("my body", _store.Get(original.Id)!.Body);
+    }
+
+    [Fact]
     public void MissingMemo_ReturnsNullOrFalse()
     {
         Assert.Null(_store.Get(42));

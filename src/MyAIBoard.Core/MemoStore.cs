@@ -87,16 +87,20 @@ public sealed class MemoStore
         return ReadById(connection, id);
     }
 
-    /// <summary>Updates the given fields; null leaves a field unchanged. Returns null if the memo is not on the board.</summary>
-    public Memo? Update(long id, string? title = null, string? body = null)
+    /// <summary>
+    /// Updates the given fields; null leaves a field unchanged. Returns null if the memo is not on the board,
+    /// or if <paramref name="expectedUpdatedAt"/> is given and the memo has been changed since then.
+    /// </summary>
+    public Memo? Update(long id, string? title = null, string? body = null, DateTimeOffset? expectedUpdatedAt = null)
     {
         using var connection = Open();
         using var transaction = connection.BeginTransaction();
 
         var changed = Convert.ToInt64(Execute(connection,
             "UPDATE memos SET title = COALESCE($title, title), body = COALESCE($body, body), updated_at = $now " +
-            $"WHERE id = $id AND {Live}; SELECT changes();",
-            ("$id", id), ("$title", title), ("$body", body), ("$now", Timestamp(DateTimeOffset.UtcNow))));
+            $"WHERE id = $id AND {Live} AND ($expected IS NULL OR updated_at = $expected); SELECT changes();",
+            ("$id", id), ("$title", title), ("$body", body), ("$now", Timestamp(DateTimeOffset.UtcNow)),
+            ("$expected", expectedUpdatedAt is { } expected ? Timestamp(expected) : null)));
         if (changed == 0)
             return null;
         BumpRevision(connection);
