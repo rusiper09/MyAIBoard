@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -739,6 +740,63 @@ public partial class MainWindow : Window
             WindowState = WindowState.Normal;
         _desktopPin?.RaiseUntilDeactivated();
         Activate();
+    }
+
+    // ───────────── Export and import ─────────────
+
+    // The dialogs get no owner: a desktop-pinned widget sits under other windows, and an owned
+    // dialog would sink with it.
+
+    private void Export_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "메모 내보내기",
+            FileName = $"AIBoard-{DateTime.Now:yyyy-MM-dd}",
+            Filter = "JSON - 다시 가져올 수 있음 (*.json)|*.json|Markdown - 읽기용 (*.md)|*.md",
+            AddExtension = true,
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            var memos = _store.GetAll();
+            var now = DateTimeOffset.Now;
+            var markdown = dialog.FileName.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
+            File.WriteAllText(dialog.FileName, markdown ? MemoExport.ToMarkdown(memos, now) : MemoExport.ToJson(memos, now));
+            ShowNotice($"메모 {memos.Count}개를 내보냈어요");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException)
+        {
+            ShowNotice("내보내지 못했어요");
+        }
+    }
+
+    private void Import_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "메모 가져오기",
+            Filter = "MyAIBoard 내보내기 파일 (*.json)|*.json",
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            var (added, skipped) = _store.Import(MemoExport.FromJson(File.ReadAllText(dialog.FileName)));
+            ShowTrash(false);
+            ReloadIfChanged(force: true);
+            ShowNotice(skipped == 0 ? $"메모 {added}개를 가져왔어요"
+                : $"메모 {added}개를 가져왔어요 (이미 있는 {skipped}개는 건너뜀)");
+        }
+        catch (FormatException)
+        {
+            ShowNotice("MyAIBoard에서 내보낸 JSON 파일이 아니에요");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException)
+        {
+            ShowNotice("가져오지 못했어요");
+        }
     }
 
     // ───────────── Global shortcut ─────────────

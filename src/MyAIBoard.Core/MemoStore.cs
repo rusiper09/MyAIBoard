@@ -109,6 +109,48 @@ public sealed class MemoStore
         return ReadById(connection, id);
     }
 
+    /// <summary>
+    /// Adds exported memos at the bottom of the board, in order, keeping their source and timestamps.
+    /// A memo already on the board (same title, body and creation time) is skipped, so importing the
+    /// same file twice adds nothing. Returns how many were added and skipped.
+    /// </summary>
+    public (int Added, int Skipped) Import(IEnumerable<MemoExport.ExportedMemo> memos)
+    {
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+
+        var existing = ReadMemos(connection, $"SELECT {MemoColumns} FROM memos WHERE {Live}")
+            .Select(m => (m.Title, m.Body, Timestamp(m.CreatedAt)))
+            .ToHashSet();
+        var position = Convert.ToInt64(Execute(connection, "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM memos"));
+
+        int added = 0, skipped = 0;
+        foreach (var memo in memos)
+        {
+            var created = Timestamp(memo.CreatedAt);
+            if (!existing.Add((memo.Title, memo.Body, created)))
+            {
+                skipped++;
+                continue;
+            }
+
+            Execute(connection,
+                "INSERT INTO memos (title, body, is_collapsed, sort_order, source, created_at, updated_at) " +
+                "VALUES ($title, $body, $collapsed, $order, $source, $created, $updated)",
+                ("$title", memo.Title), ("$body", memo.Body), ("$collapsed", memo.IsCollapsed ? 1 : 0),
+                ("$order", position++), ("$source", memo.Source),
+                ("$created", created), ("$updated", Timestamp(memo.UpdatedAt)));
+            added++;
+        }
+
+        if (added > 0)
+        {
+            BumpRevision(connection);
+            transaction.Commit();
+        }
+        return (added, skipped);
+    }
+
     public bool SetCollapsed(long id, bool isCollapsed)
     {
         using var connection = Open();

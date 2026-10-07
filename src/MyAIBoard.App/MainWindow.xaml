@@ -20,6 +20,8 @@
             <MenuItem x:Name="NewMemoMenuItem" Header="새 메모" Click="NewMemo_Click" />
             <MenuItem x:Name="VisibilityItem" Header="위젯 숨기기" Click="ToggleVisibility_Click" />
             <MenuItem x:Name="TrashItem" Header="휴지통" Click="TrashItem_Click" />
+            <MenuItem Header="내보내기…" Click="Export_Click" />
+            <MenuItem Header="가져오기…" Click="Import_Click" />
             <Separator />
             <MenuItem Header="정렬" IsEnabled="False" />
             <MenuItem x:Name="SortManualItem" Header="직접 정렬 (드래그)" Tag="{x:Static local:SortMode.Manual}" Click="Sort_Click" />
