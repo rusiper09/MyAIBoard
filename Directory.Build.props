@@ -4,6 +4,7 @@
   <PropertyGroup>
     <Version>0.1.0</Version>
     <Product>MyAIBoard</Product>
+    <Copyright>Copyright (c) 2026 rusiper09</Copyright>
   </PropertyGroup>
 
 </Project>

@@ -122,3 +122,7 @@ dotnet test MyAIBoard.slnx
 3. GitHub Actions(`.github/workflows/release.yml`)가 테스트, 패키징 후 릴리스에 zip을 올립니다.
 
 로컬에서 zip만 만들려면 `scripts/package.ps1`을 실행합니다(`artifacts/release/`).
+
+## 라이선스
+
+[MIT](LICENSE)
