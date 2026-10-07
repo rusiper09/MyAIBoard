@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MyAIBoard.Core;
+using MyAIBoard.Mcp;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -13,7 +14,7 @@ builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogL
 
 builder.Services.AddSingleton(new MemoStore(BoardPaths.DefaultDatabasePath));
 builder.Services
-    .AddMcpServer(options => options.ServerInfo = new() { Name = "myaiboard", Version = "0.1.0" })
+    .AddMcpServer(options => options.ServerInfo = new() { Name = "myaiboard", Version = typeof(BoardTools).Assembly.GetName().Version!.ToString(3) })
     .WithStdioServerTransport()
     // Relaxed escaping keeps Korean text readable in tool results instead of \uXXXX escapes.
     .WithToolsFromAssembly(serializerOptions: new JsonSerializerOptions(JsonSerializerDefaults.Web)

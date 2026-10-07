@@ -1,0 +1,40 @@
+name: Release
+
+# Push a tag like v0.1.0 (matching <Version> in Directory.Build.props) to publish a release
+# with the self-contained zip from scripts/package.ps1.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check tag matches version
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          if ("v$version" -ne "${{ github.ref_name }}") {
+            throw "Tag ${{ github.ref_name }} does not match version $version in Directory.Build.props"
+          }
+
+      - name: Test
+        run: dotnet test MyAIBoard.slnx -c Release
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/release/*.zip
+          generate_release_notes: true

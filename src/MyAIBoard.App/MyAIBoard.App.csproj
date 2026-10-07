@@ -15,8 +15,6 @@
     <AssemblyName>MyAIBoard</AssemblyName>
     <RootNamespace>MyAIBoard.App</RootNamespace>
     <ApplicationIcon>Assets\MyAIBoard.ico</ApplicationIcon>
-    <Product>MyAIBoard</Product>
-    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

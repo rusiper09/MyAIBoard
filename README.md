@@ -17,21 +17,35 @@ DB 구조는 `PRAGMA user_version`으로 버전을 관리하며, 새 버전이 �
 
 ## 설치
 
-.NET 10 SDK가 필요합니다.
+Windows 10/11 (x64). [Releases](../../releases)에서 `MyAIBoard-<버전>-win-x64.zip`을 받아 압축을 풀고, 그 폴더에서 실행합니다.
+.NET이 함께 들어 있어서 따로 설치할 것은 없습니다.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
+소스에서 직접 빌드해 설치하려면(.NET 10 SDK 필요) 저장소 루트에서 `scripts/install.ps1`을 같은 방식으로 실행합니다.
+
 `%USERPROFILE%\.myaiboard\bin`에 설치하고, 시작 메뉴 바로가기와 로그인 시 자동 실행을 등록한 뒤 위젯을 띄웁니다.
+Claude Code나 Codex가 설치돼 있으면 보드에 연결할지 묻습니다(`-Mcp yes` / `-Mcp no`로 미리 정할 수 있음). Codex를 연결하면 `~/.codex/AGENTS.md`에 aiboard 요청을 이 도구로 처리하라는 짧은 안내도 넣습니다.
 보드(`board.db`)와 설정도 `%USERPROFILE%\.myaiboard`에 있습니다. AppData를 쓰지 않는 이유: Codex 앱처럼 스토어(MSIX)로 설치된 앱과 그 앱이 띄운 MCP 서버는 가상화된 AppData만 보기 때문에, AppData에 두면 그쪽에서는 보드가 보이지 않습니다.
 예전 버전(`%LOCALAPPDATA%\MyAIBoard`)에서 업데이트하면 보드와 설정을 한 번 복사해 옵니다. 옛 폴더는 확인 후 지워도 됩니다.
 다시 실행하면 업데이트됩니다. 자동 실행 설정을 건드리지 않으려면 `-NoAutostart`를 붙이세요(위젯 메뉴에서도 끌 수 있습니다).
 AI 세션이 실행 중인 MCP 서버는 그 세션을 다시 시작해야 새 버전으로 바뀝니다.
 
+### 제거
+
+```powershell
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+위젯, 바로가기, 자동 실행, Claude Code / Codex 연결, `AGENTS.md` 안내를 지웁니다. 보드와 설정(`%USERPROFILE%\.myaiboard`)은 남기며, 함께 지우려면 `-RemoveData`를 붙입니다.
+
 ## AI 연결
 
-Claude Code:
+설치할 때 연결하지 않았거나 CLI를 찾지 못했다면 직접 등록합니다.
+
+Claude Code (`claude` CLI가 없으면 `~/.claude.json`의 `mcpServers`에 같은 경로로 `myaiboard` 항목을 추가):
 
 ```powershell
 claude mcp add --scope user myaiboard -- "$env:USERPROFILE\.myaiboard\bin\MyAIBoard.Mcp.exe"
@@ -100,3 +114,11 @@ AI는 메모를 영구 삭제할 수 없습니다. 영구 삭제는 위젯의 �
 ```powershell
 dotnet test MyAIBoard.slnx
 ```
+
+### 배포
+
+1. `Directory.Build.props`의 `<Version>`을 올리고 `CHANGELOG.md`에 변경 내용을 적습니다.
+2. 커밋한 뒤 같은 버전의 태그를 올립니다: `git tag v0.1.0` → `git push origin v0.1.0`
+3. GitHub Actions(`.github/workflows/release.yml`)가 테스트, 패키징 후 릴리스에 zip을 올립니다.
+
+로컬에서 zip만 만들려면 `scripts/package.ps1`을 실행합니다(`artifacts/release/`).
