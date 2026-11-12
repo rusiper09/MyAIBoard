@@ -2,7 +2,7 @@
 
   <!-- One version for the widget, the MCP server and the release zip (scripts/package.ps1 reads it). -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Product>MyAIBoard</Product>
     <Copyright>Copyright (c) 2026 rusiper09</Copyright>
   </PropertyGroup>
