@@ -39,6 +39,9 @@ public sealed class WidgetSettings
     public WindowMode Mode { get; set; } = WindowMode.Desktop;
     public SortMode Sort { get; set; } = SortMode.Manual;
 
+    /// <summary>Whether the "완료" section at the bottom of the board is expanded.</summary>
+    public bool ShowCompleted { get; set; }
+
     /// <summary>System-wide shortcut that opens a new memo, e.g. "Ctrl+Alt+N"; empty turns it off.</summary>
     public string NewMemoHotkey { get; set; } = "Ctrl+Alt+N";
 

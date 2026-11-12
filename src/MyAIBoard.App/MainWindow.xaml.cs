@@ -27,7 +27,14 @@ public partial class MainWindow : Window
 
     private readonly MemoStore _store;
     private readonly WidgetSettings _settings;
+    private static readonly TimeSpan ReminderCheckInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan HighlightDuration = TimeSpan.FromSeconds(2.5);
+
+    /// <summary>The board (or the trash, while it is shown).</summary>
     private readonly ObservableCollection<MemoItem> _items = [];
+    /// <summary>Done memos, in the folding section under the board; most recently completed first.</summary>
+    private readonly ObservableCollection<MemoItem> _doneItems = [];
+    private readonly DispatcherTimer _reminderTimer;
     private readonly DispatcherTimer _pollTimer;
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _undoTimer;
@@ -43,6 +50,10 @@ public partial class MainWindow : Window
     private bool _showingTrash;
     /// <summary>Memos deleted since the undo toast appeared; "되돌리기" restores all of them.</summary>
     private readonly List<long> _recentlyDeleted = [];
+    /// <summary>What "되돌리기" does: restore the recent deletes, or reopen a memo just completed.</summary>
+    private Action? _undo;
+    /// <summary>The memo whose reminder the "직접 입력" popup is setting.</summary>
+    private MemoItem? _reminderTarget;
     private Point _dragStart;
     private MemoItem? _dragCandidate;
     private bool _isDragging;
@@ -54,6 +65,7 @@ public partial class MainWindow : Window
         _settings = settings;
         InitializeComponent();
         MemoList.ItemsSource = _items;
+        DoneList.ItemsSource = _doneItems;
         RestorePlacement();
         UpdateSortChecks();
 
@@ -77,6 +89,10 @@ public partial class MainWindow : Window
         _purgeTimer = new DispatcherTimer { Interval = TrashPurgeInterval };
         _purgeTimer.Tick += (_, _) => PurgeOldTrash();
 
+        // Reminders fire within this interval of their time (or at the next start, if the widget was off).
+        _reminderTimer = new DispatcherTimer { Interval = ReminderCheckInterval };
+        _reminderTimer.Tick += (_, _) => CheckReminders();
+
         SourceInitialized += (_, _) =>
         {
             GlassBackdrop.Apply(this, (double)FindResource("WidgetCornerRadiusValue"));
@@ -88,8 +104,10 @@ public partial class MainWindow : Window
         {
             PurgeOldTrash();
             ReloadIfChanged();
+            CheckReminders();
             _pollTimer.Start();
             _purgeTimer.Start();
+            _reminderTimer.Start();
         };
         Closing += (_, e) =>
         {
@@ -107,6 +125,7 @@ public partial class MainWindow : Window
         _tray = new TrayIcon(BoardMenu, ToggleVisibility);
         LinkText.OpenFailed += ShowNotice;
         LinkText.TagClicked += FilterByTag;
+        LinkText.ChecklistToggled += ToggleChecklistItem;
 
         // The menu button anchors the menu under itself; right-click elsewhere opens it at the cursor.
         BoardMenu.Closed += (_, _) =>
@@ -128,8 +147,20 @@ public partial class MainWindow : Window
             if (!force && revision == _lastRevision && DateTime.UtcNow - _lastReload < RelativeTimeRefresh)
                 return;
 
-            var memos = _showingTrash ? _store.GetDeleted() : Sort(_store.GetAll());
-            SyncItems(ApplySearch(memos), DateTimeOffset.UtcNow);
+            var memos = ApplySearch(_showingTrash ? _store.GetDeleted() : Sort(_store.GetAll()));
+            var allIds = memos.Select(m => m.Id).ToHashSet();
+            var now = DateTimeOffset.UtcNow;
+            if (_showingTrash)
+            {
+                SyncItems(_items, memos, allIds, now);
+                SyncItems(_doneItems, [], allIds, now);
+            }
+            else
+            {
+                SyncItems(_items, memos.Where(m => !m.IsCompleted).ToList(), allIds, now);
+                SyncItems(_doneItems, memos.Where(m => m.IsCompleted)
+                    .OrderByDescending(m => m.CompletedAt).ThenByDescending(m => m.Id).ToList(), allIds, now);
+            }
             UpdateChrome();
 
             _lastRevision = revision;
@@ -150,31 +181,34 @@ public partial class MainWindow : Window
     };
 
     /// <summary>
-    /// Makes the bound collection match the store, reusing existing items so their cards stay put.
+    /// Makes a bound collection match the store, reusing existing items so their cards stay put.
     /// An unsaved draft, if any, stays pinned at the top. Changes made elsewhere (by an AI) win
     /// over an open editor: the edit is dropped and the user gets a notice.
     /// </summary>
-    private void SyncItems(IReadOnlyList<Memo> memos, DateTimeOffset now)
+    /// <param name="allIds">Every memo being shown, in either list: one that left this list but is
+    /// still among them moved to the other list (e.g. was completed) rather than being deleted.</param>
+    private void SyncItems(ObservableCollection<MemoItem> items, IReadOnlyList<Memo> memos, HashSet<long> allIds, DateTimeOffset now)
     {
         var ids = memos.Select(m => m.Id).ToHashSet();
-        for (var i = _items.Count - 1; i >= 0; i--)
+        for (var i = items.Count - 1; i >= 0; i--)
         {
-            if (_items[i].IsDraft || ids.Contains(_items[i].Id)) continue;
+            if (items[i].IsDraft || ids.Contains(items[i].Id)) continue;
 
-            if (_items[i].IsEditing)
-                ShowNotice("편집 중이던 메모를 AI가 삭제했어요");
-            _items.RemoveAt(i);
+            if (items[i].IsEditing)
+                ShowNotice(allIds.Contains(items[i].Id) ? "AI가 이 메모를 완료 상태로 바꿔서 편집을 취소했어요"
+                    : "편집 중이던 메모를 AI가 삭제했어요");
+            items.RemoveAt(i);
         }
 
-        var offset = DraftOffset;
+        var offset = items.Count > 0 && items[0].IsDraft ? 1 : 0;
         for (var i = 0; i < memos.Count; i++)
         {
             var memo = memos[i];
             var target = i + offset;
-            var existing = _items.FirstOrDefault(item => !item.IsDraft && item.Id == memo.Id);
+            var existing = items.FirstOrDefault(item => !item.IsDraft && item.Id == memo.Id);
             if (existing is null)
             {
-                _items.Insert(target, new MemoItem(memo, now));
+                items.Insert(target, new MemoItem(memo, now));
                 continue;
             }
 
@@ -184,13 +218,15 @@ public partial class MainWindow : Window
                 ShowNotice("AI가 이 메모를 수정해서 편집을 취소했어요");
             }
             existing.Update(memo, now);
-            var currentIndex = _items.IndexOf(existing);
+            var currentIndex = items.IndexOf(existing);
             if (currentIndex != target)
-                _items.Move(currentIndex, target);
+                items.Move(currentIndex, target);
         }
     }
 
     private int DraftOffset => _items.Count > 0 && _items[0].IsDraft ? 1 : 0;
+
+    private IEnumerable<MemoItem> AllItems => _items.Concat(_doneItems);
 
     private bool IsSearching => SearchBox.Text.Trim().Length > 0;
 
@@ -205,7 +241,7 @@ public partial class MainWindow : Window
 
         var tags = terms.Where(t => t.Length > 1 && t[0] == '#').Select(t => t[1..]).ToList();
         var words = terms.Where(t => t[0] != '#').ToList();
-        var editing = _items.Where(i => i.IsEditing && !i.IsDraft).Select(i => i.Id).ToHashSet();
+        var editing = AllItems.Where(i => i.IsEditing && !i.IsDraft).Select(i => i.Id).ToHashSet();
 
         return memos.Where(m => editing.Contains(m.Id) || Matches(m)).ToList();
 
@@ -220,10 +256,18 @@ public partial class MainWindow : Window
 
     private void UpdateChrome()
     {
+        // The pill counts what is left to do; done memos are counted in their own section.
         var count = _items.Count(item => !item.IsDraft);
         CountText.Text = count.ToString();
         CountPill.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyText.Visibility = _items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyText.Visibility = _items.Count == 0 && _doneItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        var hasDone = !_showingTrash && _doneItems.Count > 0;
+        DoneHeader.Visibility = hasDone ? Visibility.Visible : Visibility.Collapsed;
+        DoneCountText.Text = _doneItems.Count.ToString();
+        DoneList.Visibility = hasDone && _settings.ShowCompleted ? Visibility.Visible : Visibility.Collapsed;
+        DoneChevron.Text = _settings.ShowCompleted ? "" : ""; // ChevronDown / ChevronRight
+        DoneHeader.ToolTip = _settings.ShowCompleted ? "완료한 메모 접기" : "완료한 메모 보기";
         EmptyText.Text = IsSearching ? $"\"{SearchBox.Text.Trim()}\"에 맞는 메모가 없어요."
             : _showingTrash ? $"휴지통이 비어 있어요.\n삭제한 메모는 {TrashRetention.Days}일 동안 여기 보관돼요."
             : "아직 메모가 없어요.\nAI에게 \"aiboard에 추가해\"라고 말해보세요.";
@@ -448,7 +492,7 @@ public partial class MainWindow : Window
 
     private void SetAllCollapsed(bool collapsed) => Write(() =>
     {
-        foreach (var item in _items.Where(i => !i.IsDraft && i.IsCollapsed != collapsed).ToList())
+        foreach (var item in AllItems.Where(i => !i.IsDraft && i.IsCollapsed != collapsed).ToList())
             _store.SetCollapsed(item.Id, collapsed);
     });
 
@@ -460,24 +504,35 @@ public partial class MainWindow : Window
         {
             if (!_store.Delete(item.Id)) return;
 
+            // Deletes in a row pile up under one "되돌리기"; anything else on the toast is replaced.
+            if (_recentlyDeleted.Count == 0) _undo = null;
             _recentlyDeleted.Add(item.Id);
-            UndoText.Text = _recentlyDeleted.Count == 1
-                ? "휴지통으로 옮겼어요"
-                : $"메모 {_recentlyDeleted.Count}개를 휴지통으로 옮겼어요";
-            UndoToast.Visibility = Visibility.Visible;
-            _undoTimer.Stop();
-            _undoTimer.Start();
+            ShowUndoToast(_recentlyDeleted.Count == 1
+                    ? "휴지통으로 옮겼어요"
+                    : $"메모 {_recentlyDeleted.Count}개를 휴지통으로 옮겼어요",
+                RestoreRecentlyDeleted);
         });
+    }
+
+    private void RestoreRecentlyDeleted()
+    {
+        foreach (var id in _recentlyDeleted.ToList())
+            _store.Restore(id);
+    }
+
+    private void ShowUndoToast(string text, Action undo)
+    {
+        UndoText.Text = text;
+        _undo = undo;
+        UndoToast.Visibility = Visibility.Visible;
+        _undoTimer.Stop();
+        _undoTimer.Start();
     }
 
     private void Undo_Click(object sender, RoutedEventArgs e)
     {
-        var ids = _recentlyDeleted.ToList();
-        Write(() =>
-        {
-            foreach (var id in ids)
-                _store.Restore(id);
-        });
+        if (_undo is { } undo)
+            Write(undo);
         HideUndoToast();
     }
 
@@ -485,7 +540,215 @@ public partial class MainWindow : Window
     {
         _undoTimer.Stop();
         _recentlyDeleted.Clear();
+        _undo = null;
         UndoToast.Visibility = Visibility.Collapsed;
+    }
+
+    // ───────────── Done and checklists ─────────────
+
+    private void Complete_Click(object sender, RoutedEventArgs e)
+    {
+        if (ItemOf(sender) is not { IsDraft: false, IsDeleted: false } item) return;
+
+        var completing = !item.IsCompleted;
+        Write(() =>
+        {
+            if (!_store.SetCompleted(item.Id, completing) || !completing) return;
+
+            // The card leaves for the (possibly folded) done section, so offer a way back.
+            _recentlyDeleted.Clear();
+            ShowUndoToast("완료했어요", () => _store.SetCompleted(item.Id, false));
+        });
+    }
+
+    private void DoneHeader_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.ShowCompleted = !_settings.ShowCompleted;
+        _settings.Save();
+        UpdateChrome();
+    }
+
+    /// <summary>A "- [ ]" box in a memo body was clicked: tick that line off (or back on) in the stored body.</summary>
+    private void ToggleChecklistItem(TextBlock block, int lineIndex)
+    {
+        if (block.DataContext is not MemoItem { IsDraft: false, IsDeleted: false, IsEditing: false } item) return;
+        if (MemoChecklist.Toggle(item.Body, lineIndex) is not { } body) return;
+
+        Write(() =>
+        {
+            // Same rule as editing: if an AI changed the memo meanwhile, its version wins.
+            if (_store.Update(item.Id, body: body, expectedUpdatedAt: item.UpdatedAt) is null)
+                ShowNotice("AI가 먼저 수정해서 체크하지 못했어요");
+        });
+    }
+
+    // ───────────── 이어서 하기 ─────────────
+
+    /// <summary>Copies a prompt for a new AI session that picks the memo up where it was left.</summary>
+    private void Resume_Click(object sender, RoutedEventArgs e)
+    {
+        if (ItemOf(sender) is not { IsDraft: false } item) return;
+
+        try
+        {
+            Clipboard.SetText(item.ResumePrompt());
+            ShowNotice("이어서 하기 프롬프트를 복사했어요\nAI 세션에 붙여 넣으세요");
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Another program is holding the clipboard.
+            ShowNotice("클립보드를 쓸 수 없어요. 잠시 후 다시 눌러 주세요");
+        }
+    }
+
+    // ───────────── Reminders ─────────────
+
+    private void Reminder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || ItemOf(sender) is not { IsDraft: false, IsDeleted: false } item) return;
+
+        var now = DateTime.Now;
+        var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
+        menu.Items.Add(new MenuItem { Header = "알림", IsEnabled = false });
+        foreach (var (label, at) in ReminderTime.Presets(now))
+        {
+            var preset = new MenuItem { Header = label, InputGestureText = ReminderTime.Describe(at, now) };
+            preset.Click += (_, _) => SetReminder(item, at);
+            menu.Items.Add(preset);
+        }
+
+        var custom = new MenuItem { Header = "직접 입력…" };
+        custom.Click += (_, _) =>
+        {
+            _reminderTarget = item;
+            ReminderInput.Text = "";
+            ReminderPopup.PlacementTarget = button;
+            ReminderPopup.IsOpen = true;
+        };
+        menu.Items.Add(custom);
+
+        if (item.RemindAt is not null)
+        {
+            menu.Items.Add(new Separator());
+            var clear = new MenuItem { Header = "알림 해제", InputGestureText = item.HasReminder ? item.ReminderText : "" };
+            clear.Click += (_, _) => SetReminder(item, null);
+            menu.Items.Add(clear);
+        }
+        menu.IsOpen = true;
+    }
+
+    private void SetReminder(MemoItem item, DateTime? at)
+    {
+        Write(() =>
+        {
+            if (!_store.SetReminder(item.Id, at is { } local ? new DateTimeOffset(local) : null)) return;
+            ShowNotice(at is { } time ? $"{ReminderTime.Describe(time, DateTime.Now)}에 알려드릴게요" : "알림을 해제했어요");
+        });
+    }
+
+    private void ReminderPopup_Opened(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () => ReminderInput.Focus());
+
+    private void ReminderInput_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var text = ReminderInput.Text.Trim();
+        if (text.Length == 0)
+        {
+            ReminderPreview.Text = "15:30 · 오후 3시 · 내일 9:00 · 11/20 14:00 · +2h · 30분 후";
+            ReminderPreview.Foreground = (Brush)FindResource("TextSecondary");
+        }
+        else if (ReminderTime.TryParse(text, DateTime.Now, out var at))
+        {
+            ReminderPreview.Text = $"→ {ReminderTime.Describe(at, DateTime.Now)} · Enter로 설정";
+            ReminderPreview.Foreground = (Brush)FindResource("ReminderUpcoming");
+        }
+        else
+        {
+            ReminderPreview.Text = "알 수 없는 시각이에요 (지난 시각도 안 돼요)";
+            ReminderPreview.Foreground = (Brush)FindResource("ReminderOverdue");
+        }
+    }
+
+    private void ReminderInput_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            ReminderPopup.IsOpen = false;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            if (_reminderTarget is not { } item || !ReminderTime.TryParse(ReminderInput.Text, DateTime.Now, out var at)) return;
+            ReminderPopup.IsOpen = false;
+            SetReminder(item, at);
+        }
+    }
+
+    /// <summary>Shows a Windows notification for every reminder that is due, once each.</summary>
+    private void CheckReminders()
+    {
+        IReadOnlyList<Memo> due;
+        try
+        {
+            due = _store.GetDueReminders(DateTimeOffset.UtcNow);
+            if (due.Count == 0) return;
+            foreach (var memo in due)
+                _store.MarkReminded(memo.Id, DateTimeOffset.UtcNow);
+        }
+        catch (SqliteException)
+        {
+            return; // busy; the next check tries again
+        }
+
+        var title = due.Count == 1 ? $"⏰ {due[0].Title}" : $"⏰ 알림 {due.Count}개";
+        var text = due.Count == 1
+            ? FirstLine(due[0].Body) ?? "AI Board 메모 알림"
+            : string.Join("\n", due.Take(4).Select(m => $"• {m.Title}")) + (due.Count > 4 ? $"\n외 {due.Count - 4}개" : "");
+        var first = due[0].Id;
+        _tray?.ShowNotification(title, text, () =>
+        {
+            ShowWidget();
+            RevealMemo(first);
+        });
+        ReloadIfChanged(force: true);
+    }
+
+    /// <summary>First line of a body that is not just hashtags, for notification text.</summary>
+    private static string? FirstLine(string body) =>
+        body.Split('\n')
+            .Select(line => line.Trim())
+            .FirstOrDefault(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(word => !word.StartsWith('#')));
+
+    /// <summary>Scrolls to a memo (out of the trash, search or folded done section if needed) and outlines it briefly.</summary>
+    private void RevealMemo(long id)
+    {
+        ShowTrash(false);
+        if (IsSearching) CloseSearch();
+        ReloadIfChanged(force: true);
+
+        var item = AllItems.FirstOrDefault(i => i.Id == id && !i.IsDraft);
+        if (item is null) return;
+        if (_doneItems.Contains(item) && !_settings.ShowCompleted)
+        {
+            _settings.ShowCompleted = true;
+            _settings.Save();
+            UpdateChrome();
+        }
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            var list = _doneItems.Contains(item) ? DoneList : MemoList;
+            (list.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement)?.BringIntoView();
+            item.IsHighlighted = true;
+            var timer = new DispatcherTimer { Interval = HighlightDuration };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                item.IsHighlighted = false;
+            };
+            timer.Start();
+        });
     }
 
     // ───────────── Trash ─────────────
@@ -505,6 +768,7 @@ public partial class MainWindow : Window
 
         _showingTrash = show;
         _items.Clear();
+        _doneItems.Clear();
         MemoScroller.ScrollToTop();
         ReloadIfChanged(force: true);
     }
@@ -561,7 +825,7 @@ public partial class MainWindow : Window
                                || FindAncestor<TextBoxBase>(e.OriginalSource) is not null
                                || FindAncestor<Hyperlink>(e.OriginalSource) is not null;
         _dragCandidate = _settings.Sort == SortMode.Manual && !_showingTrash && !IsSearching && !startedOnControl
-                         && ItemOf(sender) is { IsEditing: false, IsDraft: false } item
+                         && ItemOf(sender) is { IsEditing: false, IsDraft: false, IsCompleted: false } item
             ? item
             : null;
     }

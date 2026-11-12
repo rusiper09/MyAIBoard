@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media;
 using MyAIBoard.Core;
 
 namespace MyAIBoard.App;
@@ -25,6 +26,16 @@ public static partial class LinkText
     public static string? GetText(DependencyObject element) => (string?)element.GetValue(TextProperty);
     public static void SetText(DependencyObject element, string? value) => element.SetValue(TextProperty, value);
 
+    /// <summary>When true, "- [ ]" / "- [x]" lines show a clickable box (see <see cref="ChecklistToggled"/>).</summary>
+    public static readonly DependencyProperty ChecklistProperty = DependencyProperty.RegisterAttached(
+        "Checklist", typeof(bool), typeof(LinkText), new PropertyMetadata(false, (d, _) => Render(d)));
+
+    public static bool GetChecklist(DependencyObject element) => (bool)element.GetValue(ChecklistProperty);
+    public static void SetChecklist(DependencyObject element, bool value) => element.SetValue(ChecklistProperty, value);
+
+    /// <summary>Raised when a checklist box is clicked, with the TextBlock and the line (counted from 0) of the item.</summary>
+    public static event Action<TextBlock, int>? ChecklistToggled;
+
     /// <summary>Raised when a clicked link cannot be opened, with a message for the user.</summary>
     public static event Action<string>? OpenFailed;
 
@@ -37,12 +48,68 @@ public static partial class LinkText
     [GeneratedRegex("""'(?<link>(?:https?://|[A-Za-z]:\\|\\\\|%[A-Za-z_][A-Za-z0-9_]*%\\)[^'\r\n]+)'|""" + MemoTags.Pattern)]
     private static partial Regex LinkPattern();
 
-    private static void OnTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    private static void OnTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) => Render(d);
+
+    private static void Render(DependencyObject d)
     {
         if (d is not TextBlock block) return;
 
         block.Inlines.Clear();
-        var text = (string?)e.NewValue ?? "";
+        var text = GetText(block) ?? "";
+        if (!GetChecklist(block))
+        {
+            AddLinked(block, block.Inlines, text);
+            return;
+        }
+
+        var lines = text.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (i > 0) block.Inlines.Add(new LineBreak());
+            var line = lines[i].TrimEnd('\r');
+            if (MemoChecklist.ParseLine(line, i) is not { } item)
+            {
+                AddLinked(block, block.Inlines, line);
+                continue;
+            }
+
+            if (item.Indent.Length > 0)
+                block.Inlines.Add(new Run(item.Indent));
+
+            var glyph = new Run(item.IsChecked ? "" : "") // CheckboxComposite / Checkbox
+            {
+                FontSize = block.FontSize,
+                BaselineAlignment = BaselineAlignment.Center,
+            };
+            if (block.TryFindResource("IconFont") is FontFamily iconFont)
+                glyph.FontFamily = iconFont;
+            var box = new Hyperlink(glyph) { ToolTip = item.IsChecked ? "체크 해제" : "체크" };
+            if (block.TryFindResource(item.IsChecked ? "ChecklistBoxChecked" : "ChecklistBox") is Style boxStyle)
+                box.Style = boxStyle;
+            var lineIndex = i;
+            box.Click += (_, _) => ChecklistToggled?.Invoke(block, lineIndex);
+            block.Inlines.Add(box);
+            block.Inlines.Add(new Run(" "));
+
+            if (item.IsChecked)
+            {
+                // Done steps read as done: struck through and dimmed.
+                var done = new Span { TextDecorations = TextDecorations.Strikethrough };
+                if (block.TryFindResource("CardTextTertiary") is Brush dim)
+                    done.Foreground = dim;
+                AddLinked(block, done.Inlines, item.Text);
+                block.Inlines.Add(done);
+            }
+            else
+            {
+                AddLinked(block, block.Inlines, item.Text);
+            }
+        }
+    }
+
+    /// <summary>Adds the text to <paramref name="inlines"/>, turning quoted links and hashtags into hyperlinks.</summary>
+    private static void AddLinked(TextBlock block, InlineCollection inlines, string text)
+    {
         var position = 0;
         foreach (Match match in LinkPattern().Matches(text))
         {
@@ -71,12 +138,12 @@ public static partial class LinkText
             }
 
             if (shown.Index > position)
-                block.Inlines.Add(new Run(text[position..shown.Index]));
-            block.Inlines.Add(hyperlink);
+                inlines.Add(new Run(text[position..shown.Index]));
+            inlines.Add(hyperlink);
             position = shown.Index + shown.Length;
         }
         if (position < text.Length)
-            block.Inlines.Add(new Run(text[position..]));
+            inlines.Add(new Run(text[position..]));
     }
 
     private static void Open(string link)

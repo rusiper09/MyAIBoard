@@ -60,7 +60,8 @@ public sealed class StdioServerTests : IAsyncLifetime
         var tools = await _client.ListToolsAsync();
 
         Assert.Equal(
-            ["add_memo", "delete_memo", "get_memo", "list_memos", "list_trash", "restore_memo", "update_memo"],
+            ["add_memo", "complete_memo", "delete_memo", "get_memo", "list_memos", "list_trash", "restore_memo",
+             "set_reminder", "update_memo"],
             tools.Select(t => t.Name).Order());
     }
 
@@ -79,6 +80,21 @@ public sealed class StdioServerTests : IAsyncLifetime
 
         using var listed = JsonDocument.Parse(await Call("list_memos", new() { ["tag"] = "myproject" }));
         Assert.Equal("한글 제목", Assert.Single(listed.RootElement.EnumerateArray()).GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task AddWithReminder_ThenComplete_OverTheWire()
+    {
+        var remindAt = DateTime.Now.AddDays(1).ToString("yyyy-MM-dd'T'10:00");
+        using var added = JsonDocument.Parse(await Call("add_memo", new() { ["title"] = "알림", ["remind_at"] = remindAt }));
+        var id = added.RootElement.GetProperty("id").GetInt64();
+        Assert.Equal(DateTime.Parse(remindAt), added.RootElement.GetProperty("remindAt").GetDateTimeOffset().LocalDateTime);
+
+        using var done = JsonDocument.Parse(await Call("complete_memo", new() { ["id"] = id }));
+        Assert.True(done.RootElement.GetProperty("isCompleted").GetBoolean());
+
+        using var open = JsonDocument.Parse(await Call("list_memos", new()));
+        Assert.Empty(open.RootElement.EnumerateArray());
     }
 
     [Fact]

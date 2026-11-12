@@ -242,6 +242,100 @@ public sealed class MemoStoreTests : IDisposable
         Assert.Equal(newer, UserVersion(path));
     }
 
+    [Fact]
+    public void Update_WithExpectedTime_MatchesTheSameInstantWrittenDifferently()
+    {
+        // Timestamps written by other tools may use "Z" instead of "+00:00".
+        var memo = _store.Add("t", "", "User");
+        var path = Path.Combine(_directory, "board.db");
+        Exec(path, $"UPDATE memos SET updated_at = '2026-11-12T06:00:00.0000000Z', remind_at = '2026-11-12T05:00:00Z' WHERE id = {memo.Id}");
+        var stored = _store.Get(memo.Id)!;
+
+        Assert.NotNull(_store.Update(memo.Id, body: "x", expectedUpdatedAt: stored.UpdatedAt));
+        Assert.Equal([memo.Id], _store.GetDueReminders(new DateTimeOffset(2026, 11, 12, 14, 0, 0, TimeSpan.FromHours(9))).Select(m => m.Id));
+    }
+
+    // ───────────── Done, reminders, origin ─────────────
+
+    [Fact]
+    public void Add_RecordsOriginAndReminder()
+    {
+        var remind = new DateTimeOffset(2030, 1, 2, 3, 4, 0, TimeSpan.Zero);
+
+        var memo = _store.Add("t", "", "Claude", folder: @"E:\Project\App", branch: "main", remindAt: remind);
+
+        Assert.Equal(@"E:\Project\App", memo.Folder);
+        Assert.Equal("main", memo.Branch);
+        Assert.Equal(remind, memo.RemindAt);
+        Assert.Null(memo.CompletedAt);
+    }
+
+    [Fact]
+    public void SetCompleted_TogglesWithoutTouchingEditTime()
+    {
+        var memo = _store.Add("t", "", "User");
+
+        Assert.True(_store.SetCompleted(memo.Id, true));
+        var done = _store.Get(memo.Id)!;
+        Assert.True(done.IsCompleted);
+        Assert.Equal(memo.UpdatedAt, done.UpdatedAt);
+
+        // Completing again keeps the first completion time and still reports success.
+        Assert.True(_store.SetCompleted(memo.Id, true));
+        Assert.Equal(done.CompletedAt, _store.Get(memo.Id)!.CompletedAt);
+
+        Assert.True(_store.SetCompleted(memo.Id, false));
+        Assert.False(_store.Get(memo.Id)!.IsCompleted);
+
+        Assert.False(_store.SetCompleted(999, true));
+    }
+
+    [Fact]
+    public void DueReminders_FireOnceForOpenMemos_AndRearmWhenChanged()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var due = _store.Add("due", "", "User", remindAt: now.AddMinutes(-1));
+        var later = _store.Add("later", "", "User", remindAt: now.AddHours(1));
+        var done = _store.Add("done", "", "User", remindAt: now.AddMinutes(-1));
+        _store.SetCompleted(done.Id, true);
+
+        Assert.Equal([due.Id], _store.GetDueReminders(now).Select(m => m.Id));
+
+        Assert.True(_store.MarkReminded(due.Id, now));
+        Assert.Empty(_store.GetDueReminders(now));
+        Assert.False(_store.MarkReminded(due.Id, now)); // only the first one counts
+
+        // Moving the reminder arms it again; clearing it removes it.
+        _store.SetReminder(due.Id, now.AddMinutes(-0.5));
+        Assert.Equal([due.Id], _store.GetDueReminders(now).Select(m => m.Id));
+        _store.SetReminder(due.Id, null);
+        Assert.Null(_store.Get(due.Id)!.RemindAt);
+        Assert.Empty(_store.GetDueReminders(now));
+
+        Assert.Equal([later.Id], _store.GetDueReminders(now.AddHours(2)).Select(m => m.Id));
+    }
+
+    [Fact]
+    public void ExportImport_KeepsDoneStateReminderAndOrigin_ButPastRemindersDoNotFire()
+    {
+        var past = DateTimeOffset.UtcNow.AddDays(-1);
+        var future = DateTimeOffset.UtcNow.AddDays(1);
+        var a = _store.Add("a", "", "Claude", folder: @"E:\x", branch: "dev", remindAt: past);
+        _store.Add("b", "", "User", remindAt: future);
+        _store.SetCompleted(a.Id, true);
+        var json = MemoExport.ToJson(_store.GetAll(), DateTimeOffset.UtcNow);
+
+        var other = new MemoStore(Path.Combine(_directory, "other.db"));
+        other.Import(MemoExport.FromJson(json));
+
+        var imported = other.GetAll().ToDictionary(m => m.Title);
+        Assert.True(imported["a"].IsCompleted);
+        Assert.Equal((@"E:\x", "dev"), (imported["a"].Folder, imported["a"].Branch));
+        Assert.NotNull(imported["a"].RemindedAt);
+        Assert.Null(imported["b"].RemindedAt);
+        Assert.Empty(other.GetDueReminders(DateTimeOffset.UtcNow));
+    }
+
     private static void Exec(string path, string sql)
     {
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}");

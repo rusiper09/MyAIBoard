@@ -125,6 +125,58 @@ public sealed class BoardToolsTests : IDisposable
         Assert.Throws<McpException>(() => BoardTools.UpdateMemo(_store, memo.Id, body: "x"));
     }
 
+    // ───────────── origin, done, reminders ─────────────
+
+    [Fact]
+    public void AddMemo_RecordsSessionFolder_OnlyWhenItIsMeaningful()
+    {
+        Assert.Equal(Folder, Add("a").Folder);
+        Assert.Null(BoardTools.AddMemo(_store, "b", "", "codex", @"E:\").Folder);
+    }
+
+    [Fact]
+    public void AddMemo_ReturnsLocalTimes()
+    {
+        var memo = Add("a");
+        Assert.Equal(TimeZoneInfo.Local.GetUtcOffset(memo.CreatedAt), memo.CreatedAt.Offset);
+    }
+
+    [Fact]
+    public void CompleteMemo_MovesBetweenOpenAndDoneLists()
+    {
+        var a = Add("a");
+        Add("b");
+
+        Assert.True(BoardTools.CompleteMemo(_store, a.Id).IsCompleted);
+        Assert.Equal(["b"], BoardTools.ListMemos(_store).Select(m => m.Title));
+        Assert.Equal(["a"], BoardTools.ListMemos(_store, status: "done").Select(m => m.Title));
+        Assert.Equal(2, BoardTools.ListMemos(_store, status: "all").Count);
+
+        Assert.False(BoardTools.CompleteMemo(_store, a.Id, completed: false).IsCompleted);
+        Assert.Equal(2, BoardTools.ListMemos(_store).Count);
+
+        Assert.Throws<McpException>(() => BoardTools.CompleteMemo(_store, 999));
+        Assert.Throws<McpException>(() => BoardTools.ListMemos(_store, status: "soon"));
+    }
+
+    [Fact]
+    public void Reminders_AcceptIsoAndPhrases_AndRejectThePast()
+    {
+        var now = new DateTimeOffset(2026, 11, 12, 14, 0, 0, TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 11, 12)));
+
+        var memo = BoardTools.AddMemo(_store, "a", "", "claude-code", Folder, "2026-11-13T10:00", now);
+        Assert.Equal(new DateTime(2026, 11, 13, 10, 0, 0), memo.RemindAt!.Value.LocalDateTime);
+
+        Assert.Equal(new DateTime(2026, 11, 12, 16, 0, 0),
+            BoardTools.SetReminder(_store, memo.Id, "+2h", now).RemindAt!.Value.LocalDateTime);
+        Assert.Null(BoardTools.SetReminder(_store, memo.Id, null, now).RemindAt);
+
+        var past = Assert.Throws<McpException>(() => BoardTools.SetReminder(_store, memo.Id, "2026-11-12T09:00", now));
+        Assert.Contains("2026-11-12 14:00", past.Message); // tells the AI what time it is
+        Assert.Throws<McpException>(() => BoardTools.SetReminder(_store, memo.Id, "언젠가", now));
+        Assert.Throws<McpException>(() => BoardTools.SetReminder(_store, 999, "+1h", now));
+    }
+
     // ───────────── trash ─────────────
 
     [Fact]

@@ -227,12 +227,16 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="22" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="Check" Text="&#xE73E;" FontFamily="{StaticResource IconFont}"
                                        FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource Accent}"
                                        Visibility="Collapsed" />
                             <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center"
                                               Margin="0,0,14,0" />
+                            <!-- Shortcut or detail on the right, e.g. "Ctrl+Alt+N" or the time a reminder preset means. -->
+                            <TextBlock Grid.Column="2" Text="{TemplateBinding InputGestureText}" FontSize="11.5"
+                                       VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource TextTertiary}" />
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -280,5 +284,86 @@
     <SolidColorBrush x:Key="TagText" Color="#C9B8FF" />
     <Style x:Key="TagLink" TargetType="Hyperlink" BasedOn="{StaticResource {x:Type Hyperlink}}">
         <Setter Property="Foreground" Value="{StaticResource TagText}" />
+    </Style>
+
+    <!-- Checklist boxes in memo bodies ("- [ ]" lines): never underlined, brighter on hover. -->
+    <Style x:Key="ChecklistBox" TargetType="Hyperlink">
+        <Setter Property="Foreground" Value="{StaticResource CardTextTertiary}" />
+        <Setter Property="TextDecorations" Value="{x:Null}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource CardTextPrimary}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+    <Style x:Key="ChecklistBoxChecked" TargetType="Hyperlink" BasedOn="{StaticResource ChecklistBox}">
+        <Setter Property="Foreground" Value="{StaticResource Accent}" />
+    </Style>
+
+    <!-- Reminder chip on a card: accent while upcoming, warm red once the time has passed. -->
+    <SolidColorBrush x:Key="ReminderUpcoming" Color="#A8D1FF" />
+    <SolidColorBrush x:Key="ReminderOverdue" Color="#FF9B85" />
+
+    <!-- Outline flashed around a card the user was sent to (e.g. from a reminder notification). -->
+    <SolidColorBrush x:Key="CardHighlight" Color="#CCA8D1FF" />
+
+    <!-- Round "done" toggle in front of a memo title. Content is the check glyph (empty while open). -->
+    <Style x:Key="CompleteButton" TargetType="Button">
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Foreground" Value="{StaticResource CardTextTertiary}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="Transparent">
+                        <Ellipse x:Name="Ring" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
+                                 Fill="{TemplateBinding Background}" />
+                        <TextBlock x:Name="Glyph" Text="&#xE73E;" FontFamily="{StaticResource IconFont}" FontSize="9"
+                                   FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{TemplateBinding Foreground}" Opacity="0" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Ring" Property="Stroke" Value="{StaticResource Accent}" />
+                            <Setter TargetName="Glyph" Property="Foreground" Value="{StaticResource Accent}" />
+                            <Setter TargetName="Glyph" Property="Opacity" Value="0.7" />
+                        </Trigger>
+                        <!-- Tag="Done" is set by the card when the memo is complete. -->
+                        <Trigger Property="Tag" Value="Done">
+                            <Setter TargetName="Ring" Property="Stroke" Value="{StaticResource Accent}" />
+                            <Setter TargetName="Ring" Property="Fill" Value="{StaticResource Accent}" />
+                            <Setter TargetName="Glyph" Property="Foreground" Value="#FF1C1E24" />
+                            <Setter TargetName="Glyph" Property="Opacity" Value="1" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- "완료 3 ›" header above the done section; the whole row toggles it. -->
+    <Style x:Key="SectionHeader" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="Transparent" CornerRadius="10" Padding="8,5">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{StaticResource ButtonFill}" />
+                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 </ResourceDictionary>

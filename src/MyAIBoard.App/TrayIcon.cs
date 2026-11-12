@@ -31,6 +31,21 @@ internal sealed class TrayIcon : IDisposable
             if (e.Button == Forms.MouseButtons.Left) toggleWidget();
             else if (e.Button == Forms.MouseButtons.Right) ShowMenu();
         };
+        // Not cleared on BalloonTipClosed: that also fires for the previous notification when a new one
+        // replaces it, which would wipe the new one's action.
+        _icon.BalloonTipClicked += (_, _) => _onNotificationClick?.Invoke();
+    }
+
+    private Action? _onNotificationClick;
+
+    /// <summary>
+    /// Shows a Windows notification (a toast on Windows 10/11) from the tray icon.
+    /// <paramref name="onClick"/> runs if the user clicks it.
+    /// </summary>
+    public void ShowNotification(string title, string text, Action onClick)
+    {
+        _onNotificationClick = onClick;
+        _icon.ShowBalloonTip(10_000, title, text, Forms.ToolTipIcon.None);
     }
 
     private void ShowMenu()

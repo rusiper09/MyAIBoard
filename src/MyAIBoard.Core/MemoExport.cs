@@ -20,19 +20,25 @@ public static class MemoExport
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, // keep Korean readable
     };
 
+    /// <remarks>Fields after UpdatedAt were added later; files from older versions simply leave them out.</remarks>
     public sealed record ExportedMemo(
         string Title,
         string Body,
         string Source,
         bool IsCollapsed,
         DateTimeOffset CreatedAt,
-        DateTimeOffset UpdatedAt);
+        DateTimeOffset UpdatedAt,
+        DateTimeOffset? CompletedAt = null,
+        DateTimeOffset? RemindAt = null,
+        string? Folder = null,
+        string? Branch = null);
 
     public sealed record ExportFile(string App, int Version, DateTimeOffset ExportedAt, IReadOnlyList<ExportedMemo> Memos);
 
     public static string ToJson(IEnumerable<Memo> memos, DateTimeOffset exportedAt) =>
         JsonSerializer.Serialize(new ExportFile("MyAIBoard", FormatVersion, exportedAt,
-            memos.Select(m => new ExportedMemo(m.Title, m.Body, m.Source, m.IsCollapsed, m.CreatedAt, m.UpdatedAt)).ToList()),
+            memos.Select(m => new ExportedMemo(m.Title, m.Body, m.Source, m.IsCollapsed, m.CreatedAt, m.UpdatedAt,
+                m.CompletedAt, m.RemindAt, m.Folder, m.Branch)).ToList()),
             JsonOptions);
 
     /// <summary>Reads a file written by <see cref="ToJson"/>. Throws <see cref="FormatException"/> if it is not one.</summary>
@@ -67,7 +73,7 @@ public static class MemoExport
 
         foreach (var memo in memos)
         {
-            text.Append(CultureInfo.InvariantCulture, $"\n## {memo.Title}\n\n");
+            text.Append(CultureInfo.InvariantCulture, $"\n## {(memo.IsCompleted ? "✓ " : "")}{memo.Title}\n\n");
             if (!string.IsNullOrWhiteSpace(memo.Body))
                 text.Append(memo.Body.Trim()).Append("\n\n");
 
@@ -75,6 +81,10 @@ public static class MemoExport
             text.Append(CultureInfo.InvariantCulture, $"_{source} · 작성 {Local(memo.CreatedAt)}");
             if (memo.UpdatedAt > memo.CreatedAt)
                 text.Append(CultureInfo.InvariantCulture, $" · 수정 {Local(memo.UpdatedAt)}");
+            if (memo.CompletedAt is { } completed)
+                text.Append(CultureInfo.InvariantCulture, $" · 완료 {Local(completed)}");
+            else if (memo.RemindAt is { } remind)
+                text.Append(CultureInfo.InvariantCulture, $" · 알림 {Local(remind)}");
             text.Append("_\n");
         }
         return text.ToString();
