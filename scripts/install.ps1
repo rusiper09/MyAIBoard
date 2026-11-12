@@ -64,9 +64,16 @@ if ((Test-Path (Join-Path $legacyDir 'board.db')) -and -not (Test-Path (Join-Pat
 Get-ChildItem $installDir -Recurse -Filter '*.old-*' | Remove-Item -Force -ErrorAction SilentlyContinue
 $shipped = @{}
 Get-ChildItem $staging -Recurse -File | ForEach-Object { $shipped[$_.FullName.Substring($staging.Length + 1)] = $true }
+# A file still loaded by a running MCP server cannot be deleted, but it can be renamed, and it must
+# not stay under its name: a leftover hostfxr.dll from a self-contained build makes the new
+# framework-dependent exe look for .NET in this folder and fail to start.
 Get-ChildItem $installDir -Recurse -File |
-    Where-Object { -not $shipped.ContainsKey($_.FullName.Substring($installDir.Length + 1)) } |
-    Remove-Item -Force -ErrorAction SilentlyContinue
+    Where-Object { -not $shipped.ContainsKey($_.FullName.Substring($installDir.Length + 1)) -and $_.Name -notlike '*.old-*' } |
+    ForEach-Object {
+        $leftover = $_ # inside catch, $_ is the error
+        try { Remove-Item $leftover.FullName -Force }
+        catch { Rename-Item $leftover.FullName "$($leftover.Name).old-$([DateTime]::Now.Ticks)" }
+    }
 
 $renamed = 0
 foreach ($file in Get-ChildItem $staging -Recurse -File) {
